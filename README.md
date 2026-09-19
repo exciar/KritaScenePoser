@@ -1,6 +1,6 @@
 # KSP — Krita Scene Poser
 
-KSP is an embedded posing studio for Krita. This is an early development build, version `0.0.4`. Pose Body-chan or Body-kun in the docker, or right on the canvas with **Pose on Canvas** (CSP-style). Drag body parts or rotate joints with rings, then press **Create Layer** to add the posed figure to your document as a transparent shaded guide. Scene and pose files, presets, joint limits, and line art are not implemented yet.
+KSP is an embedded posing studio for Krita. This is an early development build, version `0.0.5`. Pose Body-chan or Body-kun in the docker, or right on the canvas with **Pose on Canvas** (CSP-style). Drag body parts or rotate joints with rings. Then add the figure to your document as a transparent **line art** layer or a shaded guide layer. Scene and pose files, presets, and joint limits are not implemented yet. Importing your own models is planned; [docs/custom-figures.md](docs/custom-figures.md) explains how to prepare them.
 
 The plugin runs with Krita's bundled Python, PyQt5, and the Python standard library. It does not install packages, contact a server, or run Blender or other external tools. A separate Python installation is only useful for development tests and packaging.
 
@@ -8,7 +8,7 @@ The plugin runs with Krita's bundled Python, PyQt5, and the Python standard libr
 
 ## Install and enable
 
-1. Build the ZIP below, or use the supplied `dist/ksp-0.0.4.zip`.
+1. Build the ZIP below, or use the supplied `dist/ksp-0.0.5.zip`. Earlier builds stay in `dist/` for comparison; install only one at a time.
 2. In Krita choose **Tools → Scripts → Import Python Plugin…** and select the ZIP. Restart Krita.
 3. Open **Settings → Configure Krita → Python Plugin Manager**, enable **KSP — Krita Scene Poser**, and restart Krita again.
 4. Open **Settings → Dockers → KSP — Krita Scene Poser**.
@@ -38,11 +38,11 @@ Choose **Body-chan** or **Body-kun** at the top of the docker; switching keeps t
 - **Ctrl+Z** and **Ctrl+Shift+Z** undo and redo pose changes while the viewport has focus. This history is separate from Krita's document undo.
 - **R** resets the selected joint. The buttons also reset the whole pose, mirror it left to right, or copy the selected limb to the other side.
 
-**Create Layer** renders the posed figure from the current view into a new transparent **KSP Figure Guide** paint layer at the document's size. The vertical framing matches the viewport; the width follows the document's shape.
+The docker's tabs hold the rest: **Pose** (canvas switches and edit buttons), **Line Art** (see below), and **Output**. **Output → Create Guide Layer** renders the shaded, posed figure from the current view into a new transparent **KSP Figure Guide** paint layer at the document's size. The vertical framing matches the viewport; the width follows the document's shape.
 
 ## Pose on the canvas
 
-- **Show on Canvas** draws the figure on the canvas exactly where **Create Layer** would put it. It follows Krita's zoom, rotation, mirroring, and panning, and your brushes keep working.
+- **Show on Canvas** draws the figure on the canvas exactly where the Create buttons would put it. It follows Krita's zoom, rotation, mirroring, and panning, and your brushes keep working.
 - **Pose on Canvas** (also the **Tools → Scripts → KSP: Pose on Canvas** action, which you can give a shortcut) works like CSP's Object tool:
   - Drag the figure on the canvas with the same Drag and Rings modes as the docker.
   - Drag empty space to orbit the 3D camera. **Shift**+drag pans the camera; **Ctrl**+drag moves it closer or farther.
@@ -50,6 +50,37 @@ Choose **Body-chan** or **Body-kun** at the top of the docker; switching keeps t
   - Brushes are paused until you turn Pose on Canvas off. The figure stays visible for drawing over.
 
 The docker viewport and the canvas show the same pose; a change in one updates the other. Canvas posing relies on Krita's internal canvas widget, which is not part of Krita's documented plugin API. If a Krita update changes it, canvas posing turns itself off and explains why, and the docker keeps working. **Copy Diagnostics** includes a `[canvas]` section for reporting problems.
+
+## Line art
+
+![Shaded, Lines, and Both views of a posed figure](docs/images/lineart-preview.png)
+
+The **View** switch above the docker viewport chooses **Shaded**, **Lines**, or **Both**. The same view is shown on the canvas.
+
+The **Line Art** tab sets:
+- which lines to draw:
+  - **Outline:** the silhouette;
+  - **Contours:** where one part passes in front of another;
+  - **Creases:** sharp folds;
+  - **Seams:** the mannequin's segment lines;
+- **Outline width** and **Inner width**, in document pixels;
+- **Crease angle**: lower finds more creases;
+- **Contour sensitivity**: higher finds smaller overlaps;
+- **Color**.
+
+Changing a setting in the Shaded view switches to Both so you can see the effect. The settings are remembered between sessions.
+
+**Output → Create Lineart Layer** renders the lines at the document's size into a new transparent **KSP Lineart** paint layer. Lines are antialiased, and nothing else is on the layer. To see the exact line weight the layer will get, use **Show on Canvas**: the canvas preview is scaled to the document, while the docker viewport shows widths in screen pixels. Every export adds a new layer and never replaces an existing one.
+
+## Your own models
+
+Importing your own rigged figures from `.glb` or `.blend` files is planned but not built yet. [docs/custom-figures.md](docs/custom-figures.md) explains:
+- how to prepare a model: armature, weights, applied transforms, and uncompressed `.blend` saves;
+- which bone names are recognized automatically: Rigify, Mixamo, and VRM/VRoid;
+- how to map other rigs with a small JSON file;
+- what works with a partial rig.
+
+The design is in the design notes.
 
 ## Documents and diagnostics
 
@@ -68,14 +99,15 @@ KSP works with Krita's default Windows renderer (ANGLE/Direct3D) and with deskto
 
 ## Menu actions and shortcuts
 
-KSP adds four actions under **Tools → Scripts**:
+KSP adds five actions under **Tools → Scripts**:
 
 - **KSP: Show Scene Poser** opens and raises the KSP docker.
-- **KSP: Create Layer** opens the docker and creates a layer, like the docker button.
+- **KSP: Create Guide Layer** opens the docker and creates a shaded guide layer, like the docker button. A shortcut assigned to its old name, **KSP: Create Layer**, keeps working.
+- **KSP: Create Lineart Layer** opens the docker and creates a line-art layer.
 - **KSP: Pose on Canvas** switches canvas posing on or off.
 - **KSP: Diagnostic Log** turns the diagnostic log on or off.
 
-The actions ship without default shortcuts, so they never clash with Krita's own. To assign keys, open **Settings → Configure Krita → Keyboard Shortcuts** and search for "KSP". If no document is open, **Create Layer** is disabled and its tooltip says why.
+The actions ship without default shortcuts, so they never clash with Krita's own. To assign keys, open **Settings → Configure Krita → Keyboard Shortcuts** and search for "KSP". If no document is open, the Create buttons are disabled and their tooltips say why.
 
 ## Diagnostic log
 
@@ -89,13 +121,16 @@ From the repository root with Python 3.10 or newer (on Windows, `py -3` avoids o
 
 ```console
 python -m unittest discover -s tests -v
-python tools/package_plugin.py --output dist/ksp-0.0.4.zip
+python tools/package_plugin.py
 ```
+
+The packager writes `dist/ksp-<version>.zip`, taking the version from `krita_scene_poser/__init__.py`. It never overwrites a build: rebuilding identical inputs reports "Already built", and different contents under an existing name fail with a request to bump the version. Text files are stored with LF line endings, so a build is reproducible from a git checkout on any platform. The source history is kept in a local git repository, with one tag per release (`v0.0.4`, `v0.0.5`, …).
 
 These commands require no third-party packages. Tests cover:
 - the posing core: vectors, quaternions, matrices, projections, forward kinematics, skinning, two-bone IK, and mirroring;
 - the viewport logic: the orbit camera, surface picking (checked against a brute-force test of every triangle), rotation rings, every drag gesture, cancel, and undo/redo;
 - the figure shaders' dialects and bone packing (checked against CPU skinning), plus the figure assets and file formats;
+- line art: settings validation and storage, line-width scaling, depth ranges and packing, and shader sanity (reserved words, matching varyings, uniform budget);
 - pixel transfer and the premultiplied readback contract;
 - the ctypes GL binding, using native callbacks;
 - document integration with test doubles;
@@ -105,7 +140,7 @@ These commands require no third-party packages. Tests cover:
 
 They run outside Krita. Actual Krita/OpenGL acceptance is separate. `tools/krita_host_probe.py` runs the renderer and a real paint-layer export inside Krita without the GUI; the compatibility notes explains how to launch it. The packager uses an explicit runtime allowlist, sorted entries, fixed timestamps and permissions, and a bundled copy of `LICENSE`. Rebuilding unchanged inputs with the same Python/zlib toolchain produces the same ZIP bytes. Development files, tests, caches, and logs do not ship.
 
-The renderer and export assumptions are recorded in the design notes. GL functions are resolved through `ctypes` so ANGLE works; see the design notes. Rendering and layer export are verified in the Krita 5.3.3 GUI on Windows. The docker lifecycle checks are the one open Phase 0 item. Both figures, Body-chan and Body-kun, are compiled into versioned rig and mesh files by a pure-Python `.blend` reader (see the design notes and `docs/images/figures-preview.png`). Viewport rendering, picking, and posing are described in the design notes, and canvas posing in the design notes. Next: joint limits, proportions, and saving poses and scenes (Phase 4). The overall roadmap is in the plan.
+The renderer and export assumptions are recorded in the design notes. GL functions are resolved through `ctypes` so ANGLE works; see the design notes. Rendering and layer export are verified in the Krita 5.3.3 GUI on Windows. The docker lifecycle checks are the one open Phase 0 item. Both figures, Body-chan and Body-kun, are compiled into versioned rig and mesh files by a pure-Python `.blend` reader (see the design notes and `docs/images/figures-preview.png`). Viewport rendering, picking, and posing are described in the design notes, canvas posing in the design notes, line art in the design notes, and the planned figure importer in the design notes. Next: joint limits, proportions, and saving poses and scenes (Phase 4), and the figure importer. The overall roadmap is in the plan.
 
 ## Update, disable, or uninstall
 

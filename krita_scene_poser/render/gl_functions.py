@@ -13,7 +13,7 @@ current.
 import ctypes
 import sys
 
-GLenum = GLbitfield = ctypes.c_uint
+GLenum = GLbitfield = GLuint = ctypes.c_uint
 GLint = GLsizei = ctypes.c_int
 GLfloat = ctypes.c_float
 GLboolean = ctypes.c_ubyte
@@ -51,6 +51,14 @@ PROTOTYPES = {
     "glDepthMask": (None, (GLboolean,)),
     # void glUniform1f(GLint location, GLfloat v0)
     "glUniform1f": (None, (GLint, GLfloat)),
+    # void glUniform1i(GLint location, GLint v0)
+    "glUniform1i": (None, (GLint, GLint)),
+    # void glUniform2f(GLint location, GLfloat v0, GLfloat v1)
+    "glUniform2f": (None, (GLint, GLfloat, GLfloat)),
+    # void glActiveTexture(GLenum texture)
+    "glActiveTexture": (None, (GLenum,)),
+    # void glBindTexture(GLenum target, GLuint texture)
+    "glBindTexture": (None, (GLenum, GLuint)),
     # void glUniform3f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2)
     "glUniform3f": (None, (GLint, GLfloat, GLfloat, GLfloat)),
     # void glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)

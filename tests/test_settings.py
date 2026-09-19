@@ -20,9 +20,10 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(Settings().diagnostic_log)
 
     def test_round_trip_through_text(self):
-        save(Settings(diagnostic_log=True), self.write)
-        self.assertEqual(self.store, {"diagnostic_log": "true"})
-        self.assertEqual(load(self.read), Settings(diagnostic_log=True))
+        saved = Settings(diagnostic_log=True, lineart='{"outline": false}')
+        save(saved, self.write)
+        self.assertEqual(self.store, {"diagnostic_log": "true", "lineart": '{"outline": false}'})
+        self.assertEqual(load(self.read), saved)
 
     def test_invalid_or_unreadable_values_fall_back_to_defaults(self):
         self.store["diagnostic_log"] = "sometimes"
@@ -35,7 +36,14 @@ class SettingsTests(unittest.TestCase):
     def test_update_returns_and_persists_changes(self):
         changed = update(Settings(), self.write, diagnostic_log=True)
         self.assertTrue(changed.diagnostic_log)
-        self.assertEqual(self.store["diagnostic_log"], "true")
+        self.assertEqual(self.store, {"diagnostic_log": "true"})
+
+    def test_update_from_a_stale_copy_keeps_other_values(self):
+        update(Settings(), self.write, lineart='{"seams": false}')
+        stale = Settings()  # Loaded before the line-art change.
+        update(stale, self.write, diagnostic_log=True)
+        self.assertEqual(load(self.read),
+                         Settings(diagnostic_log=True, lineart='{"seams": false}'))
 
 
 if __name__ == "__main__":

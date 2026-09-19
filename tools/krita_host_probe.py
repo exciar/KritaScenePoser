@@ -3,12 +3,13 @@
 From a shell (Windows paths shown)::
 
     set PYTHONPATH=<repo>;<repo>\\tools
-    kritarunner.com -s krita_host_probe -f main <report.json>
+    kritarunner.com -s krita_host_probe -f main <report.json> [<image folder>]
 
 It can also be pasted into Tools > Scripts > Scripter while the plugin is
 installed; the report is then printed. Evidence from this probe covers
 offscreen rendering, readback, and paint-layer insertion through Krita's
-real API. It does not cover the docker widget or its lifecycle.
+real API. It does not cover the docker widget or its lifecycle. With an image
+folder, the line-art step also saves ``lineart-preview.png`` there.
 """
 
 import json
@@ -262,11 +263,10 @@ def main(args=None):
         camera = OrbitCamera(pitch=0.0)
         camera.frame([j.position for j in rig.joints] + [j.tail for j in rig.joints])
         width, height = 240, 360
-        view_projection = camera.view_projection(width / height)
 
         def render(pose, grid=False):
             return qimage_to_bgra(renderer.render_image(
-                snapshot(skeleton, pose, view_projection, grid=grid), width, height))
+                snapshot(skeleton, pose, camera, width / height, grid=grid), width, height))
 
         start = time.perf_counter()
         rest = render(skeleton.rest_pose())
@@ -298,6 +298,101 @@ def main(args=None):
                 "coverage": round(covered / (width * height), 3), "changed_pixels": len(changed),
                 "render_s": round(seconds, 3)}
 
+    def render_lineart():
+        # Line art on this GPU: G-buffers, edge pass, widths, and toggles.
+        from krita_scene_poser.core.camera import OrbitCamera
+        from krita_scene_poser.core.lineart import LineArtSettings, line_uniforms
+        from krita_scene_poser.core.math3d import Quat, X_AXIS, Y_AXIS, Z_AXIS
+        from krita_scene_poser.render.shaders import snapshot
+        from krita_scene_poser.storage.figures import load_figure
+        from PyQt5.QtGui import QColor, QImage, QPainter
+        renderer = state["figure_renderer"]
+        rig, mesh = load_figure("body_kun")
+        renderer.set_mesh("body_kun", mesh)
+        skeleton = rig.skeleton
+        # The right forearm crosses in front of the belly, so contours are needed.
+        arm = skeleton.index("upper_arm.R")
+        pose = skeleton.rotate_world(skeleton.rest_pose(), arm, Quat.from_axis_angle(Z_AXIS, 0.7))
+        pose = skeleton.rotate_world(pose, arm, Quat.from_axis_angle(X_AXIS, -0.3))
+        pose = skeleton.rotate_world(pose, skeleton.index("forearm.R"),
+                                     Quat.from_axis_angle(Y_AXIS, 1.0))
+        camera = OrbitCamera(pitch=0.05, yaw=0.35)
+        camera.frame([j.position for j in rig.joints] + [j.tail for j in rig.joints])
+        width, height = 360, 540
+        shot = snapshot(skeleton, pose, camera, width / height, grid=False)
+        images = {}
+
+        def render(mode, **settings):
+            start = time.perf_counter()
+            image = renderer.render_image(shot, width, height, mode,
+                                          line_uniforms(LineArtSettings(**settings)))
+            seconds = time.perf_counter() - start
+            pixels = qimage_to_bgra(image)
+            return image, pixels, seconds
+
+        def ink(pixels):
+            """Total line coverage in pixels (alpha-weighted)."""
+            return sum(pixels[3::4]) / 255.0
+
+        shaded_image, shaded, _ = render("shaded")
+        lines_image, lines, seconds = render("lines")
+        both_image, both, _ = render("both")
+        only_outline = dict(contours=False, creases=False, seams=False)
+        thin = ink(render("lines", outline_width=2.0, **only_outline)[1])
+        thin_default = ink(render("lines", **only_outline)[1])
+        thick = ink(render("lines", outline_width=4.0, **only_outline)[1])
+        # Seams already mark every part-to-part overlap, so isolate contours.
+        with_contours = ink(render("lines", creases=False, seams=False)[1])
+        red = render("lines", color="#ff0000")[1]
+        images.update(shaded=shaded_image, lines=lines_image, both=both_image)
+
+        covered = sum(1 for a in shaded[3::4] if a)
+        colored = [lines[i:i + 3] for i in range(0, len(lines), 4) if lines[i + 3]]
+        opaque_red = [red[i:i + 3] for i in range(0, len(red), 4) if red[i + 3] == 255]
+        checks = {
+            "corners_transparent": all(lines[(y * width + x) * 4 + 3] == 0 for x, y in (
+                (0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1))),
+            "lines_present": ink(lines) > 500,
+            "lines_are_black": bool(colored) and max(max(c) for c in colored) <= 2,
+            "lines_sparser_than_figure": ink(lines) < 0.5 * covered,
+            "width_doubles_outline": 1.5 < thick / max(thin, 1.0) < 2.6,
+            "outline_only_is_sparser": thin < ink(lines),
+            "contours_add_lines": with_contours > thin_default,
+            "color_applies": bool(opaque_red) and all(
+                c[2] >= 253 and c[0] <= 2 and c[1] <= 2 for c in opaque_red),
+            "both_covers_the_figure": sum(1 for a in both[3::4] if a) >= covered,
+        }
+        failed = [name for name, ok in checks.items() if not ok]
+        if failed:
+            raise RuntimeError("Line-art checks failed: " + ", ".join(failed))
+
+        start = time.perf_counter()
+        large = renderer.render_image(snapshot(skeleton, pose, camera, 1.0, grid=False),
+                                      2048, 2048, "lines", line_uniforms(LineArtSettings()))
+        large_seconds = time.perf_counter() - start
+        renderer.release_gbuffers()
+        if large.isNull():
+            raise RuntimeError("The 2048 x 2048 line-art render returned no image")
+
+        saved = None
+        if len(args) > 1:
+            # Shaded, lines, and both side by side on paper, for visual review.
+            sheet = QImage(width * 3, height, QImage.Format_ARGB32_Premultiplied)
+            sheet.fill(QColor(255, 255, 255))
+            painter = QPainter(sheet)
+            for column, name in enumerate(("shaded", "lines", "both")):
+                painter.drawImage(column * width, 0, images[name])
+            painter.end()
+            saved = os.path.join(args[1], "lineart-preview.png")
+            if not sheet.save(saved):
+                raise RuntimeError("Could not save " + saved)
+        return {"checks": checks, "figure_coverage_px": covered,
+                "ink_px": {"all": round(ink(lines)), "outline_2px": round(thin),
+                           "outline_4px": round(thick), "outline_default": round(thin_default),
+                           "outline_and_contours": round(with_contours)},
+                "lines_render_s": round(seconds, 3), "lines_2048_s": round(large_seconds, 3),
+                "preview": os.path.basename(saved) if saved else None}
+
     def offscreen_renderer():
         # KSP's own context, as used by the canvas overlay, Create Layer, and Self-Test.
         from krita_scene_poser.core.camera import OrbitCamera
@@ -313,8 +408,8 @@ def main(args=None):
         width, height = 300, 400
         start = time.perf_counter()
         image = renderer.render("body_chan", mesh, snapshot(
-            rig.skeleton, rig.skeleton.rest_pose(), camera.view_projection(width / height),
-            grid=False), width, height)
+            rig.skeleton, rig.skeleton.rest_pose(), camera, width / height, grid=False),
+            width, height)
         seconds = time.perf_counter() - start
         pixels = qimage_to_bgra(image)
         covered = sum(1 for i in range(3, len(pixels), 4) if pixels[i])
@@ -377,7 +472,8 @@ def main(args=None):
     if _run(report, "create_context", create_context) is not None:
         if _run(report, "render_probe", render_probe) is not None:
             _run(report, "time_large_render", time_large_render)
-        _run(report, "render_figure", render_figure)
+        if _run(report, "render_figure", render_figure) is not None:
+            _run(report, "render_lineart", render_lineart)
     _run(report, "offscreen_renderer", offscreen_renderer)
     state["documents"] = []
     for profile in EXPORT_PROFILES:

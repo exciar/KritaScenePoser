@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Build a reproducible Krita plugin ZIP using only the Python standard library."""
+"""Build a reproducible Krita plugin ZIP using only the Python standard library.
+
+Past builds are never replaced: the default name comes from the plugin's
+``__version__``, an identical rebuild is reported and left alone, and a
+different build under an existing name is refused. Bump the version instead.
+"""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import sys
 import tempfile
+from typing import NamedTuple
 import zipfile
 
 
 PLUGIN_NAME = "krita_scene_poser"
-DEFAULT_OUTPUT = "dist/ksp-0.0.4.zip"
 FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 ROOT_MODULES = frozenset({
     "__init__.py", "plugin.py", "compatibility.py", "compat.py",
@@ -21,10 +27,37 @@ SOURCE_DIRECTORIES = frozenset({"ui", "core", "render", "integration", "storage"
 ASSET_SUFFIXES = frozenset({
     ".vert", ".frag", ".glsl", ".json", ".png", ".svg", ".mesh", ".rig", ".txt",
 })
+# Text files are stored with LF line endings whatever the working tree uses,
+# so any git checkout rebuilds the same bytes. Binary assets are untouched.
+TEXT_SUFFIXES = frozenset({
+    ".py", ".json", ".html", ".svg", ".desktop", ".txt", ".vert", ".frag", ".glsl", ".md",
+})
+TEXT_NAMES = frozenset({"LICENSE"})
 EXCLUDED_DIRECTORIES = frozenset({
     "__pycache__", "tests", "test", "tools", "docs", "logs", "dist",
     "build", "venv", "node_modules",
 })
+
+
+class BuildExistsError(ValueError):
+    """A different build already has this name; it is never overwritten."""
+
+
+class Build(NamedTuple):
+    members: tuple
+    status: str  # "built", or "unchanged" when an identical file already existed
+
+
+def plugin_version(source_root: Path) -> str:
+    source = (source_root / PLUGIN_NAME / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"', source, re.MULTILINE)
+    if not match:
+        raise ValueError("The plugin __version__ was not found.")
+    return match.group(1)
+
+
+def default_output(source_root: Path) -> Path:
+    return Path("dist") / "ksp-{}.zip".format(plugin_version(source_root))
 
 
 def _is_runtime_file(relative: Path) -> bool:
@@ -94,8 +127,15 @@ def directory_entries(archive_names) -> set[str]:
     return directories
 
 
-def package_plugin(source_root: Path, output: Path) -> tuple[str, ...]:
-    """Write an atomic deterministic ZIP and return its member names."""
+def _archive_bytes(path: Path) -> bytes:
+    data = path.read_bytes()
+    if path.suffix.lower() in TEXT_SUFFIXES or path.name in TEXT_NAMES:
+        data = data.replace(b"\r\n", b"\n")
+    return data
+
+
+def package_plugin(source_root: Path, output: Path) -> Build:
+    """Write a deterministic ZIP atomically; never replace an existing file."""
     files = collect_files(source_root)
     members = dict.fromkeys(directory_entries(files))
     members.update(files)
@@ -122,27 +162,38 @@ def package_plugin(source_root: Path, output: Path) -> tuple[str, ...]:
                 else:
                     info.external_attr = 0o100644 << 16
                     info.compress_type = zipfile.ZIP_DEFLATED
-                    archive.writestr(info, path.read_bytes(), compresslevel=9)
-        temporary_path.replace(output)
+                    archive.writestr(info, _archive_bytes(path), compresslevel=9)
+        if output.exists():
+            if output.read_bytes() == temporary_path.read_bytes():
+                return Build(tuple(sorted(members)), "unchanged")
+            raise BuildExistsError(
+                "{} already exists and differs from this build. Past builds are never "
+                "overwritten; bump __version__ in {}/__init__.py.".format(output.name, PLUGIN_NAME))
+        temporary_path.rename(output)  # Fails rather than replaces if the name appeared meanwhile.
     finally:
+        # Only this build's own temporary file is ever removed.
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
-    return tuple(sorted(members))
+    return Build(tuple(sorted(members)), "built")
 
 
 def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=Path(DEFAULT_OUTPUT), help=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, help="defaults to dist/ksp-<__version__>.zip")
     args = parser.parse_args(argv)
-    output = args.output if args.output.is_absolute() else root / args.output
     try:
-        members = package_plugin(root, output)
+        output = args.output or default_output(root)
+        output = output if output.is_absolute() else root / output
+        build = package_plugin(root, output)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         parser.exit(1, "Packaging failed: " + str(error) + "\n")
-    directories = sum(name.endswith("/") for name in members)
-    print("Built {} ({} files, {} directories)".format(
-        output, len(members) - directories, directories))
+    directories = sum(name.endswith("/") for name in build.members)
+    if build.status == "unchanged":
+        print("Already built: {} is identical; nothing was written.".format(output))
+    else:
+        print("Built {} ({} files, {} directories)".format(
+            output, len(build.members) - directories, directories))
     return 0
 
 

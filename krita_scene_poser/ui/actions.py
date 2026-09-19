@@ -47,10 +47,16 @@ class KSPExtension(Extension):
             "krita_scene_poser_show", "KSP: Show Scene Poser", MENU)
         show.setIcon(icon)
         show.triggered.connect(lambda checked=False: self._show(window))
+        # The id predates line art; keep it so assigned shortcuts survive.
         create = window.createAction(
-            "krita_scene_poser_create_layer", "KSP: Create Layer", MENU)
+            "krita_scene_poser_create_layer", "KSP: Create Guide Layer", MENU)
         create.setIcon(icon)
-        create.triggered.connect(lambda checked=False: self._create_layer(window))
+        create.triggered.connect(lambda checked=False: self._create_layer(window, "guide"))
+        lineart = window.createAction(
+            "krita_scene_poser_create_lineart_layer", "KSP: Create Lineart Layer", MENU)
+        lineart.setIcon(icon)
+        lineart.setToolTip("Render the posed figure's line art into a new layer.")
+        lineart.triggered.connect(lambda checked=False: self._create_layer(window, "lineart"))
         canvas = window.createAction(
             "krita_scene_poser_pose_on_canvas", "KSP: Pose on Canvas", MENU)
         canvas.setIcon(icon)
@@ -83,9 +89,13 @@ class KSPExtension(Extension):
         except Exception as error:
             self._warn(window, error)
 
-    def _create_layer(self, window):
+    def _create_layer(self, window, kind):
         try:
-            self._docker(window).create_layer()
+            dock = self._docker(window)
+            if kind == "lineart":
+                dock.create_lineart_layer()
+            else:
+                dock.create_layer()
         except Exception as error:
             self._warn(window, error)
 

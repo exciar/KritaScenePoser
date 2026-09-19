@@ -4,6 +4,9 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from ..core.camera import OrbitCamera
 from ..core.editor import DRAG, RINGS, PoseEditor
+from ..core.lineart import LineArtSettings
+
+MODES = ("shaded", "lines", "both")
 
 
 class PoseSession(QObject):
@@ -18,6 +21,8 @@ class PoseSession(QObject):
         self.camera = OrbitCamera()
         self.figure_id = self.rig = self.mesh = None
         self.dragging = False  # A view is mid-drag: renders may be drafts.
+        self.mode = "shaded"  # Display: shaded, lines, or both; shared by all views.
+        self.lines = LineArtSettings()
 
     def set_figure(self, figure_id, rig, mesh, picker):
         first = self.editor is None
@@ -59,6 +64,17 @@ class PoseSession(QObject):
         elif action in ("undo", "redo", "reset_joint", "reset_pose", "mirror_pose"):
             getattr(editor, action)()
         self.changed.emit()
+
+    def set_display(self, mode):
+        if mode in MODES and mode != self.mode:
+            self.mode = mode
+            self.changed.emit()
+
+    def set_lines(self, settings):
+        settings = settings.validated()
+        if settings != self.lines:
+            self.lines = settings
+            self.changed.emit()
 
     def set_mode(self, mode):
         if self.editor is not None and self.editor.mode != mode:

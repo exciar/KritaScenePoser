@@ -6,11 +6,11 @@
 </head>
 <body>
   <h1>KSP — Krita Scene Poser</h1>
-  <p><strong>Version 0.0.4 — early development build.</strong> Pose the Body-chan or
-  Body-kun figure in the docker or directly on the canvas, and create a transparent guide
-  layer from it. Pose
-  files, presets, and line art are not implemented yet. Compatibility is verified only on
-  Krita 5.3.3 for Windows.</p>
+  <p><strong>Version 0.0.5 — early development build.</strong> Pose the Body-chan or
+  Body-kun figure in the docker or directly on the canvas, then create a transparent
+  line-art layer or shaded guide layer from it. Pose files, presets, and importing your
+  own models are not implemented yet. Compatibility is verified only on Krita 5.3.3 for
+  Windows.</p>
   <h2>Pose a figure</h2>
   <p>Choose a figure at the top of the docker; switching keeps the pose. Click a body part
   to select it; the hint line explains what dragging it does.</p>
@@ -27,15 +27,32 @@
     mirror the pose and copy a limb to the other side.</li>
   </ul>
   <h2>Pose on the canvas</h2>
-  <p><strong>Show on Canvas</strong> draws the figure on the canvas where Create Layer would
-  place it; it follows canvas zoom, rotation, mirror, and pan. <strong>Pose on Canvas</strong>
+  <p><strong>Show on Canvas</strong> (Pose tab) draws the figure on the canvas where the
+  Create buttons would place it; it follows canvas zoom, rotation, mirror, and pan. <strong>Pose on Canvas</strong>
   (or Tools → Scripts → KSP: Pose on Canvas) works like an object tool: drag the figure to
   pose it, drag empty space to orbit (Shift pans, Ctrl moves closer). The wheel, middle-drag,
   Space, and the right-click palette still control the canvas. Brushes are paused until you
   turn it off. If a Krita update changes its canvas internals, canvas posing turns itself
   off and the docker keeps working.</p>
-  <p><strong>Create Layer</strong> adds a new transparent "KSP Figure Guide" paint layer
-  with the posed figure, rendered from the current view at the document's size.</p>
+  <h2>Line art</h2>
+  <p>The <strong>View</strong> switch above the viewport chooses Shaded, Lines, or Both,
+  in the docker and on the canvas. The <strong>Line Art</strong> tab turns line types on or
+  off: Outline (the silhouette), Contours (one part in front of another), Creases (sharp
+  folds), and Seams (the mannequin's segment lines). It also sets the outline and inner
+  widths in document pixels, the crease angle (lower finds more), the contour sensitivity
+  (higher finds smaller overlaps), and the line color. Settings are remembered. Changing
+  one while in the Shaded view switches to Both so you see the effect.</p>
+  <p>The canvas preview shows the exact line weight of the layer; the docker viewport
+  shows widths in screen pixels.</p>
+  <h2>Create layers</h2>
+  <p>In the <strong>Output</strong> tab, <strong>Create Lineart Layer</strong> adds a new
+  transparent "KSP Lineart" paint layer, and <strong>Create Guide Layer</strong> adds a new
+  transparent "KSP Figure Guide" layer with the shaded figure. Both render from the current
+  view at the document's size, and both always add a new layer, never replacing one.</p>
+  <h2>Your own models</h2>
+  <p>Importing your own figures from <code>.glb</code> or <code>.blend</code> files is
+  planned. The KSP source repository's <code>docs/custom-figures.md</code> explains how to
+  prepare a model for it.</p>
   <h2>Open KSP</h2>
   <p>Enable KSP in Settings → Configure Krita → Python Plugin Manager, restart
   Krita, then open Settings → Dockers → KSP — Krita Scene Poser.</p>
@@ -51,8 +68,8 @@
   A size guard limits memory use.</p>
   <h2>Menu actions and shortcuts</h2>
   <p>Tools → Scripts contains <strong>KSP: Show Scene Poser</strong>,
-  <strong>KSP: Create Layer</strong>, <strong>KSP: Pose on Canvas</strong>, and
-  <strong>KSP: Diagnostic Log</strong>. They have
+  <strong>KSP: Create Guide Layer</strong>, <strong>KSP: Create Lineart Layer</strong>,
+  <strong>KSP: Pose on Canvas</strong>, and <strong>KSP: Diagnostic Log</strong>. They have
   no default shortcuts, so they never clash with Krita's. To assign keys, open
   Settings → Configure Krita → Keyboard Shortcuts and search for "KSP".</p>
   <h2>Diagnostic log</h2>

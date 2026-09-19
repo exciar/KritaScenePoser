@@ -18,6 +18,7 @@ SUPPORTED_PROFILES = frozenset((
     "sRGB built-in",
 ))
 GUIDE_LAYER_NAME = "KSP Figure Guide"
+LINEART_LAYER_NAME = "KSP Lineart"
 PROBE_LAYER_NAME = "KSP Feasibility Triangle"
 CONVERT_HINT = (
     " Convert it with Image > Convert Image Color Space… to RGB/Alpha, "

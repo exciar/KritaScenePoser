@@ -7,7 +7,9 @@ import tempfile
 import unittest
 import zipfile
 
-from tools.package_plugin import collect_files, package_plugin
+from tools.package_plugin import (
+    BuildExistsError, collect_files, default_output, package_plugin, plugin_version,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -62,6 +64,41 @@ class PackagePluginTests(unittest.TestCase):
                 self.assertEqual(info.external_attr >> 16,
                                  0o40755 if info.is_dir() else 0o100644)
                 self.assertNotIn("\\", info.filename)
+
+    def test_a_different_build_never_overwrites_an_existing_zip(self):
+        output = self.root / "dist" / "ksp-1.0.0.zip"
+        self.assertEqual(package_plugin(self.root, output).status, "built")
+        original = output.read_bytes()
+        self.write("krita_scene_poser/render/triangle.py", "changed source")
+        with self.assertRaisesRegex(BuildExistsError, "bump __version__"):
+            package_plugin(self.root, output)
+        self.assertEqual(output.read_bytes(), original)
+        self.assertEqual(sorted(p.name for p in output.parent.iterdir()), ["ksp-1.0.0.zip"])
+
+    def test_identical_rebuild_is_reported_and_leaves_the_file_alone(self):
+        output = self.root / "dist" / "ksp-1.0.0.zip"
+        package_plugin(self.root, output)
+        stamp = output.stat().st_mtime_ns
+        self.assertEqual(package_plugin(self.root, output).status, "unchanged")
+        self.assertEqual(output.stat().st_mtime_ns, stamp)
+        self.assertEqual(sorted(p.name for p in output.parent.iterdir()), ["ksp-1.0.0.zip"])
+
+    def test_default_output_follows_the_plugin_version(self):
+        self.write("krita_scene_poser/__init__.py", '"""Fixture."""\n\n__version__ = "9.8.7"\n')
+        self.assertEqual(plugin_version(self.root), "9.8.7")
+        self.assertEqual(default_output(self.root), Path("dist") / "ksp-9.8.7.zip")
+        self.assertEqual(plugin_version(REPOSITORY),
+                         default_output(REPOSITORY).stem.replace("ksp-", ""))
+
+    def test_text_is_stored_with_lf_and_binary_assets_are_untouched(self):
+        (self.root / "krita_scene_poser/render/crlf.py").write_bytes(b"a = 1\r\nb = 2\r\n")
+        binary = b"KSPMESH\x00\r\n\x00\xff\r\n"
+        (self.root / "krita_scene_poser/assets/figure.mesh").write_bytes(binary)
+        output = self.root / "release.zip"
+        package_plugin(self.root, output)
+        with zipfile.ZipFile(output) as archive:
+            self.assertEqual(archive.read("krita_scene_poser/render/crlf.py"), b"a = 1\nb = 2\n")
+            self.assertEqual(archive.read("krita_scene_poser/assets/figure.mesh"), binary)
 
     def test_every_member_directory_has_an_explicit_entry(self):
         output = self.root / "release.zip"

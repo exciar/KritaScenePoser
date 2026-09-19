@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QWidget
 
 from .. import log
 from ..core.interaction import PoseInteraction, Screen
+from ..core.lineart import line_uniforms
 from ..render.shaders import snapshot
 from .canvas_bridge import CanvasWatcher, find_canvas_widget, image_to_widget
 from .keys import shortcut
@@ -366,9 +367,11 @@ class CanvasController(QObject):
             factor = min(1.0, limit / max(width, height))
             w, h = max(1, round(width * factor)), max(1, round(height * factor))
             editor = session.editor
-            shot = snapshot(editor.skeleton, editor.pose, session.camera.view_projection(width / height),
+            shot = snapshot(editor.skeleton, editor.pose, session.camera, width / height,
                             editor.selected if self.posing else None, grid=self.posing)
-            image = self.offscreen.render(session.figure_id, session.mesh, shot, w, h)
+            # Widths are document pixels; this preview may be smaller than the document.
+            image = self.offscreen.render(session.figure_id, session.mesh, shot, w, h,
+                                          session.mode, line_uniforms(session.lines, w / width))
             overlay.rendered_size = size
             overlay.set_image(image, (width / w, height / h))
         except Exception as error:

@@ -14,6 +14,7 @@ GROUP = "krita_scene_poser"
 @dataclass(frozen=True)
 class Settings:
     diagnostic_log: bool = False
+    lineart: str = ""  # LineArtSettings as JSON; empty means defaults.
 
 
 def _parse(text, default):
@@ -42,17 +43,25 @@ def load(read=None):
     return Settings(**values)
 
 
-def save(settings, write=None):
-    """``write(name, text)`` persists one value; defaults to Krita's store."""
+def save(settings, write=None, names=None):
+    """``write(name, text)`` persists one value; defaults to Krita's store.
+
+    ``names`` limits which values are written (all by default).
+    """
     write = write or _krita_writer()
     for field in fields(Settings):
-        write(field.name, _format(getattr(settings, field.name)))
+        if names is None or field.name in names:
+            write(field.name, _format(getattr(settings, field.name)))
 
 
 def update(settings, write=None, **changes):
-    """Return and persist ``settings`` with ``changes`` applied."""
+    """Return ``settings`` with ``changes`` applied, persisting only the changes.
+
+    The extension and each docker hold their own copies, so a save from a
+    stale copy must never undo another owner's change.
+    """
     changed = replace(settings, **changes)
-    save(changed, write)
+    save(changed, write, names=changes.keys())
     return changed
 
 

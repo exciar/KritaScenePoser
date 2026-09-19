@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import QOpenGLWidget
 from .. import log
 from ..core.editor import RINGS
 from ..core.interaction import PoseInteraction, Screen
+from ..core.lineart import line_uniforms
 from ..render.figure_renderer import FigureRenderer
 from ..render.gl_renderer import CapabilityError
 from ..render.shaders import snapshot
@@ -29,6 +30,10 @@ class _EmptySkeleton:
 
     @staticmethod
     def skinning_matrices(pose):
+        return ()
+
+    @staticmethod
+    def transforms(pose):
         return ()
 
 
@@ -86,14 +91,16 @@ class FigureViewport(QOpenGLWidget):
         try:
             ratio = self.devicePixelRatioF()
             width, height = max(1, round(self.width() * ratio)), max(1, round(self.height() * ratio))
-            matrix = session.camera.view_projection(self.width() / max(1, self.height()))
+            aspect = self.width() / max(1, self.height())
             if session.editor is not None and session.mesh is not None:
                 self.renderer.set_mesh(session.figure_id, session.mesh)
-                shot = snapshot(session.editor.skeleton, session.editor.pose, matrix,
-                                session.editor.selected)
+                shot = snapshot(session.editor.skeleton, session.editor.pose, session.camera,
+                                aspect, session.editor.selected)
             else:
-                shot = snapshot(_EmptySkeleton(), None, matrix)
-            self.renderer.draw(shot, width, height)
+                shot = snapshot(_EmptySkeleton(), None, session.camera, aspect)
+            # Line widths are display pixels here, so scale by the device pixel ratio.
+            self.renderer.draw(shot, width, height, mode=session.mode,
+                               lines=line_uniforms(session.lines, ratio))
             self.renderer.reset_state()
         except Exception as error:
             self._fail(error)
@@ -215,8 +222,10 @@ class FigureViewport(QOpenGLWidget):
             mode = "Rings" if editor is not None and editor.mode == RINGS else "Drag"
             projection = "Orthographic" if self.session.camera.orthographic else "Perspective"
             label = self.session.rig.display_name if self.session.rig is not None else ""
-            painter.setPen(QColor(210, 214, 222))
-            painter.drawText(10, 20, "{}  ·  {} mode  ·  {}".format(label, mode, projection))
+            view = {"shaded": "Shaded", "lines": "Lines", "both": "Shaded + lines"}[self.session.mode]
+            painter.setPen(QColor(60, 60, 60) if self.session.mode == "lines" else QColor(210, 214, 222))
+            painter.drawText(10, 20, "{}  ·  {} mode  ·  {}  ·  {}".format(
+                label, mode, projection, view))
             interaction = self._interaction()
             if interaction is not None:
                 paint_primitives(painter, interaction.overlay(self._screen()))
