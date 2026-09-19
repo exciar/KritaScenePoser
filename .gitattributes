@@ -1,0 +1,7 @@
+# Keep files byte-identical to what the packager and asset tests expect.
+* text=auto eol=lf
+*.mesh binary
+*.blend binary
+*.png binary
+*.zip binary
+*.ico binary

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- KSP action icon: a posed drawing mannequin. Original artwork, GPL-3.0-or-later. -->
+  <g fill="none" stroke="#8c8c8c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="4.2" r="2.4"/>
+    <path d="M12 7.2 11.4 13.6"/>
+    <path d="M11.9 8.6 7.6 10.9 5.2 8.4"/>
+    <path d="M11.9 8.6 15.8 11.6 18.9 10.2"/>
+    <path d="M11.4 13.6 8.6 17.4 9.6 21.4"/>
+    <path d="M11.4 13.6 15.2 16.8 17.8 20.6"/>
+  </g>
+</svg>
