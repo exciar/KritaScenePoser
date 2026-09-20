@@ -5,12 +5,13 @@ state. Skinning runs in the vertex shader: each joint's matrix arrives as
 three ``vec4`` rows of an affine transform. Line art renders two
 G-buffers, normals with part ids and packed depth, then finds edges in a
 full-screen pass. Output keeps the premultiplied-alpha contract of
-``gl_renderer``: the figure is opaque, and lines and grid are premultiplied
-and blended.
+``gl_renderer``: every pass writes premultiplied pixels, so a figure below
+full opacity, the grid, and the lines all blend correctly.
 """
 
 from array import array
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import (
     QOpenGLBuffer, QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat,
     QOpenGLShader, QOpenGLShaderProgram, QOpenGLVertexArrayObject, QSurfaceFormat,
@@ -29,7 +30,7 @@ GL_UNSIGNED_SHORT, GL_UNSIGNED_INT = 0x1403, 0x1405
 GL_LINES, GL_TRIANGLES, GL_TRIANGLE_STRIP = 0x0001, 0x0004, 0x0005
 GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT = 0x4000, 0x0100
 GL_DEPTH_TEST, GL_BLEND, GL_CULL_FACE, GL_SCISSOR_TEST, GL_DITHER = 0x0B71, 0x0BE2, 0x0B44, 0x0C11, 0x0BD0
-GL_LEQUAL = 0x0203
+GL_LEQUAL, GL_EQUAL = 0x0203, 0x0202
 GL_ONE, GL_ONE_MINUS_SRC_ALPHA = 1, 0x0303
 GL_TEXTURE_2D, GL_TEXTURE0 = 0x0DE1, 0x84C0
 GL_MAX_TEXTURE_SIZE = 0x0D33
@@ -206,13 +207,40 @@ class FigureRenderer:
             if snapshot.grid:
                 self._draw_grid(snapshot)
             if self.mesh_key is not None and mode in ("shaded", "both"):
-                self._draw_skinned("figure", snapshot)
+                self._draw_figure(snapshot)
             if want_lines:
                 self._draw_edges(snapshot, lines, width, height)
             self._check_error("figure draw")
         finally:
             if self.vao.isCreated():
                 self.vao.release()
+
+    def _draw_figure(self, snapshot):
+        """The shaded figure, opaque or evenly translucent.
+
+        Below full opacity the figure is drawn twice: once into the depth
+        buffer alone, then only where that depth won. Without the first pass
+        the far side of a limb would blend through the near side and the
+        figure would look mottled rather than evenly faded.
+        """
+        gl = self.functions
+        if snapshot.opacity >= 1.0:
+            self._draw_skinned("figure", snapshot)
+            return
+        gl.glColorMask(0, 0, 0, 0)
+        gl.glDepthMask(1)
+        self._draw_skinned("figure", snapshot)
+        gl.glColorMask(1, 1, 1, 1)
+        gl.glDepthMask(0)
+        gl.glDepthFunc(GL_EQUAL)
+        gl.glEnable(GL_BLEND)
+        gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
+        try:
+            self._draw_skinned("figure", snapshot)
+        finally:
+            gl.glDisable(GL_BLEND)
+            gl.glDepthFunc(GL_LEQUAL)
+            gl.glDepthMask(1)
 
     def _draw_grid(self, snapshot):
         gl, program = self.functions, self.programs["grid"]
@@ -248,6 +276,7 @@ class FigureRenderer:
                 gl.glUniform3f(self._uniform(program, "u_light"), *(c / length for c in LIGHT))
                 gl.glUniform4f(self._uniform(program, "u_base"), *BASE_COLOR)
                 gl.glUniform4f(self._uniform(program, "u_highlight"), *HIGHLIGHT)
+                gl.glUniform1f(self._uniform(program, "u_opacity"), snapshot.opacity)
             else:
                 gl.uniform_matrix4(self._uniform(program, "u_view"), snapshot.view)
                 gl.glUniform1f(self._uniform(program, "u_depth_near"), snapshot.depth_near)
@@ -331,8 +360,13 @@ class FigureRenderer:
             program.release()
             gl.glDisable(GL_BLEND)
 
-    def render_image(self, snapshot, width, height, mode="shaded", lines=None):
-        """Top-down, premultiplied QImage on a transparent background."""
+    def render_image(self, snapshot, width, height, mode="shaded", lines=None, scale_to=None):
+        """Top-down, premultiplied QImage on a transparent background.
+
+        ``scale_to`` is the final ``(width, height)`` when the render is a
+        supersampled one; Qt scales premultiplied pixels correctly, so the
+        smooth result keeps the alpha contract.
+        """
         validate_dimensions(width, height)
         if max(width, height) > self.functions.get_integer(GL_MAX_TEXTURE_SIZE):
             raise CapabilityError("Output exceeds this GPU's maximum texture size.")
@@ -357,6 +391,11 @@ class FigureRenderer:
             if image.isNull() or (image.width(), image.height()) != (width, height):
                 raise CapabilityError("Framebuffer readback returned an empty or incorrectly sized image.")
             self._check_error("figure readback")
+            if scale_to is not None and tuple(scale_to) != (width, height):
+                image = image.scaled(int(scale_to[0]), int(scale_to[1]),
+                                     Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+                if image.isNull():
+                    raise CapabilityError("KSP could not scale the render to the output size.")
             return image
         finally:
             QOpenGLFramebufferObject.bindDefault()

@@ -13,6 +13,11 @@ PITCH_LIMIT = math.radians(89.0)
 MIN_DISTANCE, MAX_DISTANCE = 0.05, 100.0
 
 
+def _finite(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
 class OrbitCamera:
     def __init__(self, target=Vec3(0.0, 0.9, 0.0), yaw=0.0, pitch=0.12, distance=3.0,
                  fov_y=math.radians(35.0), orthographic=False):
@@ -22,6 +27,32 @@ class OrbitCamera:
     def copy(self):
         return OrbitCamera(self.target, self.yaw, self.pitch, self.distance, self.fov_y,
                            self.orthographic)
+
+    def to_dict(self):
+        """Plain values for a scene file; angles are radians, like the attributes."""
+        return {"target": [self.target.x, self.target.y, self.target.z],
+                "yaw": self.yaw, "pitch": self.pitch, "distance": self.distance,
+                "fov_y": self.fov_y, "orthographic": bool(self.orthographic)}
+
+    @classmethod
+    def from_dict(cls, data):
+        """A camera from stored values; anything missing or damaged uses a default."""
+        camera = cls()
+        if not isinstance(data, dict):
+            return camera
+        target = data.get("target")
+        if (isinstance(target, (list, tuple)) and len(target) == 3
+                and all(_finite(value) for value in target)):
+            camera.target = Vec3(*(float(value) for value in target))
+        for name, low, high in (("yaw", -math.tau * 4, math.tau * 4),
+                                ("pitch", -PITCH_LIMIT, PITCH_LIMIT),
+                                ("distance", MIN_DISTANCE, MAX_DISTANCE),
+                                ("fov_y", math.radians(1.0), math.radians(170.0))):
+            value = data.get(name)
+            if _finite(value):
+                setattr(camera, name, min(high, max(low, float(value))))
+        camera.orthographic = bool(data.get("orthographic", False))
+        return camera
 
     def eye(self):
         horizontal = math.cos(self.pitch)

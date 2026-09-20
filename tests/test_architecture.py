@@ -11,7 +11,7 @@ KSP_HOST_PACKAGES = {"ui", "render", "integration"}
 DOCUMENT_MUTATIONS = {
     "createNode", "setPixelData", "addChildNode", "removeChildNode", "setChildNodes",
     "setColorSpace", "setColorProfile", "resizeImage", "scaleImage", "crop",
-    "rotateImage", "shearImage", "flatten", "mergeDown",
+    "rotateImage", "shearImage", "flatten", "mergeDown", "setOpacity", "setName",
 }
 
 

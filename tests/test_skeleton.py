@@ -60,6 +60,9 @@ class SkeletonTests(unittest.TestCase):
     def setUp(self):
         self.spec = figure_spec()
         self.skeleton = build(self.spec)
+        # These tests check the kinematics themselves with arbitrary rotations,
+        # so joint limits are off here; tests/test_limits.py covers them.
+        self.skeleton.limits_enabled = False
 
     def positions(self, pose):
         return [t.position for t in self.skeleton.transforms(pose)]

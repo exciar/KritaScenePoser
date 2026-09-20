@@ -62,6 +62,7 @@ precision mediump float;
 uniform vec3 u_light;
 uniform vec4 u_base;
 uniform vec4 u_highlight;
+uniform float u_opacity;
 varying vec3 v_normal;
 varying float v_selected;
 void main() {
@@ -72,7 +73,7 @@ void main() {
     vec3 color = u_base.rgb * (0.28 + 0.22 * sky + 0.62 * diffuse);
     float glow = clamp(v_selected, 0.0, 1.0) * 0.6;
     color = mix(color, u_highlight.rgb * (0.5 + 0.5 * diffuse), glow);
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color * u_opacity, u_opacity);  // Premultiplied.
 }
 """
 
@@ -169,9 +170,10 @@ float edge_at(vec2 uv) {
                 if (u_enabled.w > 0.5 && abs(neighbor.a - center.a) > 0.5 / 255.0) return 1.0;
                 if (u_enabled.z > 0.5 && dot(normal, neighbor.rgb * 2.0 - 1.0) < u_crease_cos) return 1.0;
                 if (u_enabled.y > 0.5) {
+                    // Measured against the figure's own depth, not its distance
+                    // from the camera, so contours do not change as you zoom.
                     float other_depth = depth_at(q);
-                    float scale = max(min(depth, other_depth), 0.001);
-                    if (abs(other_depth - depth) > u_depth_threshold * scale) return 1.0;
+                    if (abs(other_depth - depth) > u_depth_threshold * u_depth_range) return 1.0;
                 }
             }
         }
@@ -229,6 +231,7 @@ class RenderSnapshot:
     depth_range: float = 10.0
     selected: int = -1
     grid: bool = True
+    opacity: float = 1.0  # Figure alpha; lines carry their own in LineArtSettings.
 
 
 def bone_rows(matrices):
@@ -240,7 +243,7 @@ def bone_rows(matrices):
     return tuple(rows)
 
 
-def snapshot(skeleton, pose, camera, aspect, selected=None, grid=True):
+def snapshot(skeleton, pose, camera, aspect, selected=None, grid=True, opacity=1.0):
     """Immutable render input for one frame of ``camera`` at ``aspect``."""
     if len(skeleton.joints) > MAX_JOINTS:
         raise ValueError("The figure has more than {} joints.".format(MAX_JOINTS))
@@ -248,7 +251,8 @@ def snapshot(skeleton, pose, camera, aspect, selected=None, grid=True):
     near, span = depth_range(points, camera)
     return RenderSnapshot(bone_rows(skeleton.skinning_matrices(pose)),
                           camera.view_projection(aspect).m, camera.view().m, near, span,
-                          -1 if selected is None else selected, grid)
+                          -1 if selected is None else selected, grid,
+                          min(1.0, max(0.0, float(opacity))))
 
 
 def grid_lines(extent=2.0, step=0.25):

@@ -6,6 +6,7 @@ import time
 from krita import DockWidget, Krita
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QDoubleSpinBox, QFormLayout,
     QGridLayout, QHBoxLayout, QLabel, QPushButton, QSlider, QSpinBox, QTabWidget, QToolButton,
@@ -15,11 +16,12 @@ from PyQt5.QtWidgets import (
 from .. import diagnostics, log
 from ..core.editor import DRAG, RINGS, display_name
 from ..core.lineart import LIMITS, LineArtSettings, line_uniforms
+from ..core.output import QUALITIES, OutputSettings, OutputSizeError
 from ..core.picking import FigurePicker
 from ..integration import settings as ksp_settings
 from ..integration.krita_document import (
-    GUIDE_LAYER_NAME, LINEART_LAYER_NAME, DocumentExportError, export_layer, read_document,
-    snapshot_document,
+    GUIDE_LAYER_NAME, LINEART_LAYER_NAME, DocumentExportError, export_layer, layer_id,
+    read_document, snapshot_document, update_layer,
 )
 from ..render.gl_renderer import CapabilityError
 from ..render.offscreen import OffscreenRenderer
@@ -27,7 +29,10 @@ from ..render.pixel_transfer import PixelTransferError, qimage_to_bgra
 from ..render.shaders import snapshot
 from ..storage.figures import DEFAULT_FIGURE, available_figures, load_figure
 from ..storage.mesh_io import MeshFormatError
+from ..storage.presets import available_presets
 from ..storage.rig_io import RigFormatError
+from ..storage.scene_io import SceneFormatError
+from . import scene_files
 from .canvas_overlay import CanvasController
 from .session import PoseSession
 from .viewport import FigureViewport
@@ -35,12 +40,13 @@ from .viewport import FigureViewport
 DOCKER_ID = "krita_scene_poser"
 TITLE = "KSP — Krita Scene Poser"
 EXPECTED_ERRORS = (CapabilityError, DocumentExportError, PixelTransferError,
-                   MeshFormatError, RigFormatError)
+                   MeshFormatError, RigFormatError, SceneFormatError, OutputSizeError)
+WORKSPACE_DELAY = 1500  # Milliseconds of quiet before the workspace is stored.
 NO_DOCUMENT = "Open or create a document to create a KSP layer."
-GUIDE_TOOLTIP = ("Render the posed, shaded figure from this view into a new transparent "
-                 "paint layer at the document's size.")
+GUIDE_TOOLTIP = ("Render the posed, shaded figure from this view into a transparent paint "
+                 "layer, at the size set below.")
 LINEART_TOOLTIP = ("Render the posed figure's line art, using the Line Art settings, into a "
-                   "new transparent paint layer at the document's size.")
+                   "transparent paint layer at the size set below.")
 IDLE_HINT = ("Click a body part to select it. Right-drag or Alt+drag orbits, middle-drag "
              "pans, the wheel zooms, F frames.")
 CANVAS_HINT = ("Posing on the canvas: drag the figure to pose it; drag empty space to orbit "
@@ -56,6 +62,8 @@ EDIT_BUTTONS = (
 VIEWS = (("shaded", "Shaded", "Show the shaded figure."),
          ("lines", "Lines", "Show only the line art, as Create Lineart Layer will draw it."),
          ("both", "Both", "Show line art over the shaded figure."))
+SIZE_LABELS = (("document", "Document size"), ("custom", "Custom size"))
+ANCHOR_LABELS = (("center", "Centered"), ("topleft", "Top left"))
 LINE_TOGGLES = (("outline", "Outline", "The figure's silhouette."),
                 ("contours", "Contours", "Where one part overlaps another, e.g. an arm across the body."),
                 ("creases", "Creases", "Sharp folds of the surface."),
@@ -82,7 +90,14 @@ class KSPDocker(DockWidget):
         self.shown_lines = None  # Settings the Line Art widgets last showed.
 
         self.session = PoseSession(self)
-        self.session.lines = self._stored_lines()
+        self.settings = self._stored_settings()
+        self.session.lines = LineArtSettings.from_json(self.settings.lineart)
+        self.session.output = OutputSettings.from_json(self.settings.output)
+        self.session.limits = bool(self.settings.joint_limits)
+        self.workspace_timer = QTimer(self)
+        self.workspace_timer.setSingleShot(True)
+        self.workspace_timer.setInterval(WORKSPACE_DELAY)
+        self.workspace_timer.timeout.connect(self._store_workspace)
         self.session.changed.connect(self._refresh_controls)
         self.session.status.connect(self._show_status)
         self.offscreen = OffscreenRenderer()
@@ -103,6 +118,7 @@ class KSPDocker(DockWidget):
         tabs.addTab(self._build_pose_tab(), "Pose")
         tabs.addTab(self._build_lines_tab(), "Line Art")
         tabs.addTab(self._build_output_tab(), "Output")
+        tabs.addTab(self._build_scene_tab(), "Scene")
         layout.addWidget(tabs)
         self.status = QLabel("The figure loads when this docker is first shown.")
         self.status.setWordWrap(True)
@@ -112,6 +128,7 @@ class KSPDocker(DockWidget):
         root.setLayout(layout)
         self.setWidget(root)
         self.visibilityChanged.connect(self._on_visibility)
+        self.session.changed.connect(self.workspace_timer.start)
         self._refresh_document_state()
         self._refresh_controls()
 
@@ -182,9 +199,27 @@ class KSPDocker(DockWidget):
             button.clicked.connect(lambda checked=False, name=action: self._perform(name))
             grid.addWidget(button, 1 + index // 3, (index % 3) * 2, 1, 2)
             self.buttons[action] = button
+        self.limits_box = QCheckBox("Joint limits")
+        self.limits_box.setToolTip("Stop joints bending further than a body could. "
+                                   "Turn off for exaggerated or stylized poses.")
+        self.limits_box.toggled.connect(self._toggle_limits)
+        grid.addWidget(self.limits_box, 3, 0, 1, 3)
+        self.opacity_slider = self._slider(
+            "How solid the figure looks in the viewport and on the canvas.",
+            self._opacity_edited)
+        grid.addWidget(QLabel("Figure opacity"), 4, 0, 1, 2)
+        grid.addWidget(self.opacity_slider, 4, 2, 1, 4)
         page = QWidget()
         page.setLayout(grid)
         return page
+
+    def _slider(self, tip, slot):
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(0, 100)
+        slider.setValue(100)
+        slider.setToolTip(tip)
+        slider.valueChanged.connect(slot)
+        return slider
 
     def _build_lines_tab(self):
         form = QFormLayout()
@@ -222,6 +257,9 @@ class KSPDocker(DockWidget):
         self.depth_slider.setToolTip("How small an overlap depth still gets a contour line.")
         self.depth_slider.valueChanged.connect(self._lines_edited)
         form.addRow("Contour sensitivity", self.depth_slider)
+        self.line_opacity = self._slider("How solid the lines are, in the preview and "
+                                         "in the layer.", self._lines_edited)
+        form.addRow("Line opacity", self.line_opacity)
         self.color_button = QPushButton()
         self.color_button.setToolTip("Line color.")
         self.color_button.clicked.connect(self._choose_line_color)
@@ -231,11 +269,57 @@ class KSPDocker(DockWidget):
         return page
 
     def _build_output_tab(self):
+        form = QFormLayout()
+        self.size_box = QComboBox()
+        for mode, label in SIZE_LABELS:
+            self.size_box.addItem(label, mode)
+        self.size_box.setToolTip("Document size matches the canvas. A custom size renders the "
+                                 "figure at any size and places it in the document.")
+        self.size_box.currentIndexChanged.connect(self._output_edited)
+        form.addRow("Size", self.size_box)
+
+        def size_spin(tip):
+            box = QSpinBox()
+            box.setRange(1, 4096)
+            box.setSuffix(" px")
+            box.setToolTip(tip)
+            box.valueChanged.connect(self._output_edited)
+            return box
+        self.width_spin = size_spin("Layer width in document pixels.")
+        self.height_spin = size_spin("Layer height in document pixels.")
+        sizes = QHBoxLayout()
+        sizes.addWidget(self.width_spin)
+        sizes.addWidget(QLabel("\u00d7"))
+        sizes.addWidget(self.height_spin)
+        form.addRow("Custom", sizes)
+        self.anchor_box = QComboBox()
+        for anchor, label in ANCHOR_LABELS:
+            self.anchor_box.addItem(label, anchor)
+        self.anchor_box.setToolTip("Where a custom size sits in the document. Pixels outside "
+                                   "the canvas stay in the layer.")
+        self.anchor_box.currentIndexChanged.connect(self._output_edited)
+        form.addRow("Place", self.anchor_box)
+        self.quality_box = QComboBox()
+        for quality in QUALITIES:
+            self.quality_box.addItem("{}\u00d7".format(quality), quality)
+        self.quality_box.setToolTip("Render larger and scale down, for smoother edges and "
+                                    "hairlines. Uses more memory.")
+        self.quality_box.currentIndexChanged.connect(self._output_edited)
+        form.addRow("Quality", self.quality_box)
+        self.layer_opacity = self._slider("Opacity of the layer KSP creates. You can change it "
+                                          "afterwards in Krita's Layers docker.",
+                                          self._layer_opacity_edited)
+        form.addRow("Layer opacity", self.layer_opacity)
+        self.update_box = QCheckBox("Update the layer I made last")
+        self.update_box.setToolTip("Rewrite the KSP layer from the last render in this document "
+                                   "instead of adding another one. If it is gone or renamed, a "
+                                   "new layer is created.")
+        self.update_box.toggled.connect(lambda checked=False: self._refresh_document_state())
+        form.addRow(self.update_box)
+
         self.guide_button = QPushButton("Create Guide Layer")
-        self.guide_button.setToolTip(GUIDE_TOOLTIP)
         self.guide_button.clicked.connect(self.create_layer)
         self.lineart_button = QPushButton("Create Lineart Layer")
-        self.lineart_button.setToolTip(LINEART_TOOLTIP)
         self.lineart_button.clicked.connect(self.create_lineart_layer)
         self_test = QPushButton("Self-Test")
         self_test.setToolTip("Check GPU readback: channel order, orientation, and transparency. "
@@ -250,6 +334,37 @@ class KSPDocker(DockWidget):
         grid.addWidget(self.lineart_button, 0, 1)
         grid.addWidget(self_test, 1, 0)
         grid.addWidget(copy, 1, 1)
+        layout = QVBoxLayout()
+        layout.addLayout(form)
+        layout.addLayout(grid)
+        page = QWidget()
+        page.setLayout(layout)
+        return page
+
+    def _build_scene_tab(self):
+        self.preset_box = QComboBox()
+        self.preset_box.setToolTip("Bundled poses. Applying one is a single undo step.")
+        apply_preset = QPushButton("Apply Pose")
+        apply_preset.setToolTip("Put the selected pose on the current figure.")
+        apply_preset.clicked.connect(self._apply_preset)
+        buttons = (
+            ("Save Pose\u2026", "Save the figure's pose to a file you can reuse on either "
+             "figure.", lambda: scene_files.save_pose(self, self.session)),
+            ("Load Pose\u2026", "Load a pose file onto the current figure.",
+             lambda: scene_files.load_pose(self, self.session)),
+            ("Save Scene\u2026", "Save the pose, the camera, and every KSP setting.",
+             lambda: scene_files.save_scene(self, self.session)),
+            ("Load Scene\u2026", "Restore a saved pose, camera, and settings.",
+             lambda: scene_files.load_scene(self, self.session)),
+        )
+        grid = QGridLayout()
+        grid.addWidget(self.preset_box, 0, 0)
+        grid.addWidget(apply_preset, 0, 1)
+        for index, (label, tip, action) in enumerate(buttons):
+            button = QPushButton(label)
+            button.setToolTip(tip)
+            button.clicked.connect(lambda checked=False, run=action: self._run_file_action(run))
+            grid.addWidget(button, 1 + index // 2, index % 2)
         page = QWidget()
         page.setLayout(grid)
         return page
@@ -260,6 +375,8 @@ class KSPDocker(DockWidget):
         if not self.loaded:
             self.loaded = True
             self._populate_figures()
+            self._populate_presets()
+            self._restore_workspace()
 
     def _on_visibility(self, visible=True):
         try:
@@ -268,6 +385,14 @@ class KSPDocker(DockWidget):
                 self.ensure_loaded()
         except Exception as error:
             self._show_status("Could not start KSP. " + describe(error))
+
+    def _populate_presets(self):
+        presets, problems = available_presets()
+        self.preset_box.clear()
+        for preset, label in presets:
+            self.preset_box.addItem(label, preset)
+        if problems:
+            self._show_status("Some poses could not be read: " + "; ".join(problems))
 
     def _populate_figures(self):
         figures, problems = available_figures()
@@ -328,11 +453,37 @@ class KSPDocker(DockWidget):
     # Line art settings -----------------------------------------------------------
 
     @staticmethod
-    def _stored_lines():
+    def _stored_settings():
         try:
-            return LineArtSettings.from_json(ksp_settings.load().lineart)
+            return ksp_settings.load()
         except Exception:
-            return LineArtSettings()
+            return ksp_settings.Settings()  # A damaged store must not stop KSP starting.
+
+    def _store(self, **changes):
+        """Persist a few settings; other owners' values are left alone."""
+        try:
+            self.settings = ksp_settings.update(self.settings, **changes)
+        except Exception as error:
+            self._show_status("Settings could not be saved. " + describe(error))
+
+    def _store_workspace(self):
+        """Keep the current pose and settings for the next Krita session."""
+        if self.session.editor is None:
+            return
+        try:
+            self._store(workspace=self.session.scene_text())
+        except Exception:
+            pass  # A workspace that cannot be written is never worth a message.
+
+    def _restore_workspace(self):
+        text = (self.settings.workspace or "").strip()
+        if not text or self.session.editor is None:
+            return
+        try:
+            self.session.load_scene_text(text)
+            self._show_status("Restored your last pose and settings.")
+        except Exception:
+            self._store(workspace="")  # Damaged: start clean rather than fail every time.
 
     def _lines_edited(self, *unused):
         if self.updating:
@@ -345,8 +496,82 @@ class KSPDocker(DockWidget):
                 inner_width=self.inner_width.value(),
                 crease_angle=float(self.crease_angle.value()),
                 depth_sensitivity=self.depth_slider.value() / 100.0,
+                opacity=self.line_opacity.value() / 100.0,
                 **{name: box.isChecked() for name, box in self.line_toggles.items()})
             self._apply_lines(settings)
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _opacity_edited(self, value):
+        if self.updating:
+            return
+        try:
+            self.session.set_opacity(value / 100.0)
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _layer_opacity_edited(self, value):
+        if self.updating:
+            return
+        try:
+            self.session.set_layer_opacity(value / 100.0)
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _toggle_limits(self, checked=False):
+        if self.updating:
+            return
+        try:
+            self.session.set_limits(bool(checked))
+            self._store(joint_limits=bool(checked))
+            self._show_status("Joint limits are {}.".format("on" if checked else "off"))
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _output_edited(self, *unused):
+        if self.updating:
+            return
+        try:
+            settings = OutputSettings(
+                mode=self.size_box.currentData() or "document",
+                width=self.width_spin.value(), height=self.height_spin.value(),
+                anchor=self.anchor_box.currentData() or "center",
+                supersample=self.quality_box.currentData() or 1)
+            self.session.set_output(settings)
+            self._store(output=self.session.output.to_json())
+            self._refresh_document_state()
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def save_pose(self):
+        """Also used by the KSP: Save Pose menu action."""
+        self._run_file_action(lambda: scene_files.save_pose(self, self.session))
+
+    def load_pose(self):
+        """Also used by the KSP: Load Pose menu action."""
+        self._run_file_action(lambda: scene_files.load_pose(self, self.session))
+
+    def _apply_preset(self, *unused):
+        try:
+            self.ensure_loaded()
+            preset = self.preset_box.currentData()
+            if preset is None:
+                self._show_status("No bundled poses were found.")
+                return
+            self._show_status(scene_files.apply_preset(self.session, preset))
+            log.event("preset_applied", preset=preset)
+        except Exception as error:
+            self._show_status("The pose could not be applied. " + describe(error))
+
+    def _run_file_action(self, action):
+        """Every save or load reports through the status line and never raises."""
+        try:
+            self.ensure_loaded()
+            message = action()
+            if message:
+                self._show_status(message)
+        except OSError as error:
+            self._show_status("The file could not be used: {}".format(error))
         except Exception as error:
             self._show_status(describe(error))
 
@@ -362,10 +587,7 @@ class KSPDocker(DockWidget):
         self.session.set_lines(settings)
         if self.session.mode == "shaded":
             self.session.set_display("both")  # Show what the settings change.
-        try:
-            ksp_settings.update(ksp_settings.Settings(), lineart=self.session.lines.to_json())
-        except Exception as error:
-            self._show_status("Line settings could not be saved. " + describe(error))
+        self._store(lineart=self.session.lines.to_json())
 
     def _set_display(self, mode):
         try:
@@ -387,8 +609,12 @@ class KSPDocker(DockWidget):
             has_document = Krita.instance().activeDocument() is not None
         except Exception:
             has_document = True  # Unknown: leave the click to report details.
-        for button, tip in ((self.guide_button, GUIDE_TOOLTIP), (self.lineart_button, LINEART_TOOLTIP)):
+        updating = self.update_box.isChecked()
+        verb = "Update" if updating else "Create"
+        for button, label, tip in ((self.guide_button, "Guide Layer", GUIDE_TOOLTIP),
+                                   (self.lineart_button, "Lineart Layer", LINEART_TOOLTIP)):
             button.setEnabled(has_document)
+            button.setText("{} {}".format(verb, label))
             button.setToolTip(tip if has_document else NO_DOCUMENT)
 
     def _refresh_controls(self):
@@ -415,9 +641,12 @@ class KSPDocker(DockWidget):
             for view, button in self.view_buttons.items():
                 button.setChecked(view == session.mode)
             self._sync_line_widgets(session.lines)
+            self._sync_output_widgets(session)
             if selected is not None:
-                self.hint.setText("{}: {}".format(display_name(editor.joint_name(selected)),
-                                                  editor.hint(selected)))
+                hint = editor.hint(selected)
+                if editor.skeleton.at_limit(editor.pose, selected):
+                    hint += " At its limit; turn off Joint limits in the Pose tab to go further."
+                self.hint.setText("{}: {}".format(display_name(editor.joint_name(selected)), hint))
             else:
                 self.hint.setText(CANVAS_HINT if self.canvas.posing else IDLE_HINT)
         except Exception as error:
@@ -435,10 +664,30 @@ class KSPDocker(DockWidget):
             self.inner_width.setValue(lines.inner_width)
             self.crease_angle.setValue(int(round(lines.crease_angle)))
             self.depth_slider.setValue(int(round(lines.depth_sensitivity * 100)))
+            self.line_opacity.setValue(int(round(lines.opacity * 100)))
             self.color_button.setText(lines.color)
             self.color_button.setStyleSheet(
                 "background-color: {0}; color: {1};".format(
                     lines.color, "#ffffff" if QColor(lines.color).lightness() < 128 else "#000000"))
+        finally:
+            self.updating = False
+
+    def _sync_output_widgets(self, session):
+        """Show what the session holds without re-triggering the editing slots."""
+        self.updating = True
+        try:
+            self.limits_box.setChecked(session.limits)
+            self.opacity_slider.setValue(int(round(session.opacity * 100)))
+            self.layer_opacity.setValue(int(round(session.layer_opacity * 100)))
+            output = session.output
+            self.size_box.setCurrentIndex(max(0, self.size_box.findData(output.mode)))
+            self.width_spin.setValue(output.width)
+            self.height_spin.setValue(output.height)
+            self.anchor_box.setCurrentIndex(max(0, self.anchor_box.findData(output.anchor)))
+            self.quality_box.setCurrentIndex(max(0, self.quality_box.findData(output.supersample)))
+            custom = output.mode == "custom"
+            for widget in (self.width_spin, self.height_spin, self.anchor_box):
+                widget.setEnabled(custom)
         finally:
             self.updating = False
 
@@ -464,17 +713,17 @@ class KSPDocker(DockWidget):
     # Output ------------------------------------------------------------------
 
     def create_layer(self, *unused):
-        """Render the shaded posed figure into a new layer (the guide)."""
+        """Render the shaded posed figure into a layer (the guide)."""
         self._create("shaded", GUIDE_LAYER_NAME)
 
     def create_lineart_layer(self, *unused):
-        """Render the posed figure's line art into a new layer."""
+        """Render the posed figure's line art into a layer."""
         self._create("lines", LINEART_LAYER_NAME)
 
     def _create(self, mode, name):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         started = time.perf_counter()
-        width = height = None
+        plan = None
         try:
             self.ensure_loaded()
             document = Krita.instance().activeDocument()
@@ -482,28 +731,48 @@ class KSPDocker(DockWidget):
             self.last_document = None
             self.last_document = read_document(document)
             shot_document = snapshot_document(document)
-            width, height = shot_document.width, shot_document.height
             session = self.session
             if session.editor is None:
                 raise CapabilityError("No figure is loaded.")
-            log.event("export_started", width=width, height=height, mode=mode)
+            plan = session.output.resolve(shot_document.width, shot_document.height)
+            log.event("export_started", width=plan.width, height=plan.height, mode=mode,
+                      supersample=plan.supersample)
             shot = snapshot(session.editor.skeleton, session.editor.pose, session.camera,
-                            width / height, None, grid=False)
-            image = self.offscreen.render(session.figure_id, session.mesh, shot, width, height,
-                                          mode, line_uniforms(session.lines), keep_buffers=False)
-            export_layer(document, qimage_to_bgra(image), width, height,
-                         name=name, snapshot=shot_document)
+                            plan.aspect, None, grid=False, opacity=session.opacity)
+            image = self.offscreen.render(
+                session.figure_id, session.mesh, shot, plan.render_width, plan.render_height,
+                mode, line_uniforms(session.lines, plan.supersample), keep_buffers=False,
+                scale_to=(plan.width, plan.height))
+            pixels = qimage_to_bgra(image)
+            node, verb = self._write_layer(document, shot_document, pixels, plan, name)
+            session.remember_layer(shot_document.root_id, layer_id(node), name)
         except Exception as error:
             self.last_error = error
-            log.event("export_failed", error=error, width=width, height=height, mode=mode)
+            log.event("export_failed", error=error, mode=mode)
             self.status.setText("Layer not created. " + describe(error))
         else:
             self.last_error = None
-            log.event("export_finished", width=width, height=height, mode=mode,
+            log.event("export_finished", width=plan.width, height=plan.height, mode=mode,
                       seconds=round(time.perf_counter() - started, 3))
-            self.status.setText("Created “{}” at {} × {}.".format(name, width, height))
+            self.status.setText("{} “{}” at {}.".format(verb, name, plan.describe()))
+            self._refresh_document_state()
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _write_layer(self, document, shot_document, pixels, plan, name):
+        """Rewrite the remembered KSP layer when asked, otherwise add a new one."""
+        session = self.session
+        if self.update_box.isChecked():
+            target = session.layer_target(shot_document.root_id)
+            node = update_layer(document, target, pixels, plan.width, plan.height,
+                                snapshot=shot_document, origin=plan.origin,
+                                opacity=session.layer_opacity) if target else None
+            if node is not None:
+                return node, "Updated"
+        node = export_layer(document, pixels, plan.width, plan.height, name=name,
+                            snapshot=shot_document, origin=plan.origin,
+                            opacity=session.layer_opacity)
+        return node, "Created"
 
     def _self_test(self):
         try:

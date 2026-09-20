@@ -219,6 +219,10 @@ class PoseEditor:
         before, self.pose = self.pose, pose
         return self.history.record(before, pose)
 
+    def replace_pose(self, pose):
+        """Put a whole pose in place, such as a loaded file, as one undo step."""
+        return self._apply(pose)
+
     def reset_joint(self):
         if self.selected is None:
             return False

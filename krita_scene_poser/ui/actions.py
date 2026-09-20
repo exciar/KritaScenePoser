@@ -57,6 +57,14 @@ class KSPExtension(Extension):
         lineart.setIcon(icon)
         lineart.setToolTip("Render the posed figure's line art into a new layer.")
         lineart.triggered.connect(lambda checked=False: self._create_layer(window, "lineart"))
+        save_pose = window.createAction(
+            "krita_scene_poser_save_pose", "KSP: Save Pose…", MENU)
+        save_pose.setIcon(icon)
+        save_pose.triggered.connect(lambda checked=False: self._pose_file(window, "save"))
+        load_pose = window.createAction(
+            "krita_scene_poser_load_pose", "KSP: Load Pose…", MENU)
+        load_pose.setIcon(icon)
+        load_pose.triggered.connect(lambda checked=False: self._pose_file(window, "load"))
         canvas = window.createAction(
             "krita_scene_poser_pose_on_canvas", "KSP: Pose on Canvas", MENU)
         canvas.setIcon(icon)
@@ -96,6 +104,16 @@ class KSPExtension(Extension):
                 dock.create_lineart_layer()
             else:
                 dock.create_layer()
+        except Exception as error:
+            self._warn(window, error)
+
+    def _pose_file(self, window, action):
+        try:
+            dock = self._docker(window)
+            if action == "save":
+                dock.save_pose()
+            else:
+                dock.load_pose()
         except Exception as error:
             self._warn(window, error)
 

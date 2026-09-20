@@ -92,12 +92,20 @@ class FigureAssetTests(unittest.TestCase):
             skeleton = rig.skeleton
             rest = skeleton.transforms(skeleton.rest_pose())
             target = rest[skeleton.index("hand.L")].position + Vec3(-0.15, 0.25, 0.2)
-            pose, reached = skeleton.solve_ik(skeleton.rest_pose(), "hand.L", target,
-                                              pole=Vec3(0.5, 1.2, -1.0))
             with self.subTest(name):
+                skeleton.limits_enabled = False
+                pose, reached = skeleton.solve_ik(skeleton.rest_pose(), "hand.L", target,
+                                                  pole=Vec3(0.5, 1.2, -1.0))
                 self.assertTrue(reached)
                 self.assertTrue(skeleton.transforms(pose)[skeleton.index("hand.L")].position
                                 .is_close(target, 1e-9))
+                # With limits on, a real elbow may stop the hand just short of
+                # the target rather than bending sideways to meet it.
+                skeleton.limits_enabled = True
+                posed, _ = skeleton.solve_ik(skeleton.rest_pose(), "hand.L", target,
+                                             pole=Vec3(0.5, 1.2, -1.0))
+                placed = skeleton.transforms(posed)[skeleton.index("hand.L")].position
+                self.assertLess((placed - target).length(), 0.01)
 
     @unittest.skipUnless(SOURCE.is_file(), "the .blend source is not in this checkout")
     def test_compiler_reproduces_the_shipped_assets(self):

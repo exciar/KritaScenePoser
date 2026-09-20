@@ -20,9 +20,14 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(Settings().diagnostic_log)
 
     def test_round_trip_through_text(self):
-        saved = Settings(diagnostic_log=True, lineart='{"outline": false}')
+        saved = Settings(diagnostic_log=True, lineart='{"outline": false}',
+                         output='{"supersample": 2}', workspace='{"format": "ksp-scene"}',
+                         joint_limits=False)
         save(saved, self.write)
-        self.assertEqual(self.store, {"diagnostic_log": "true", "lineart": '{"outline": false}'})
+        self.assertEqual(self.store, {
+            "diagnostic_log": "true", "lineart": '{"outline": false}',
+            "output": '{"supersample": 2}', "workspace": '{"format": "ksp-scene"}',
+            "joint_limits": "false"})
         self.assertEqual(load(self.read), saved)
 
     def test_invalid_or_unreadable_values_fall_back_to_defaults(self):

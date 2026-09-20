@@ -5,6 +5,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from ..core.camera import OrbitCamera
 from ..core.editor import DRAG, RINGS, PoseEditor
 from ..core.lineart import LineArtSettings
+from ..core.output import OutputSettings
+from ..storage import scene_io
 
 MODES = ("shaded", "lines", "both")
 
@@ -23,6 +25,11 @@ class PoseSession(QObject):
         self.dragging = False  # A view is mid-drag: renders may be drafts.
         self.mode = "shaded"  # Display: shaded, lines, or both; shared by all views.
         self.lines = LineArtSettings()
+        self.opacity = 1.0  # The figure in the viewport and on the canvas.
+        self.layer_opacity = 1.0  # Applied to the layer KSP creates.
+        self.output = OutputSettings()
+        self.limits = True  # Joint limits; off lets a pose go anywhere.
+        self.last_layer = None  # (document root id, node id) of the layer KSP made.
 
     def set_figure(self, figure_id, rig, mesh, picker):
         first = self.editor is None
@@ -30,6 +37,7 @@ class PoseSession(QObject):
             self.editor = PoseEditor(rig.skeleton, picker)
         else:
             self.editor.set_figure(rig.skeleton, picker)
+        rig.skeleton.limits_enabled = self.limits
         self.figure_id, self.rig, self.mesh = figure_id, rig, mesh
         if first:
             self.frame()
@@ -79,3 +87,85 @@ class PoseSession(QObject):
     def set_mode(self, mode):
         if self.editor is not None and self.editor.mode != mode:
             self.perform("mode")
+
+    # Opacity, output, and limits ------------------------------------------------
+
+    def set_opacity(self, value):
+        value = _clamped(value)
+        if value != self.opacity:
+            self.opacity = value
+            self.changed.emit()
+
+    def set_layer_opacity(self, value):
+        value = _clamped(value)
+        if value != self.layer_opacity:
+            self.layer_opacity = value
+            self.changed.emit()
+
+    def set_output(self, settings):
+        settings = settings.validated()
+        if settings != self.output:
+            self.output = settings
+            self.changed.emit()
+
+    def set_limits(self, enabled):
+        """Joint limits apply to the figure that is loaded, and to later ones."""
+        self.limits = bool(enabled)
+        if self.editor is not None:
+            self.editor.skeleton.limits_enabled = self.limits
+        self.changed.emit()
+
+    def remember_layer(self, document_id, node_id, name):
+        self.last_layer = (document_id, node_id, name)
+
+    def layer_target(self, document_id):
+        """The node id KSP may rewrite in this document, or ``None``."""
+        if self.last_layer and self.last_layer[0] == document_id:
+            return self.last_layer[1]
+        return None
+
+    # Pose and scene files -------------------------------------------------------
+
+    def pose_text(self):
+        editor = self._require_figure()
+        return scene_io.write_pose(editor.skeleton, editor.pose, self.figure_id or "")
+
+    def scene_text(self):
+        editor = self._require_figure()
+        return scene_io.write_scene(
+            editor.skeleton, editor.pose, figure=self.figure_id or "", camera=self.camera,
+            mode=self.mode, lines=self.lines, opacity=self.opacity,
+            layer_opacity=self.layer_opacity, output=self.output)
+
+    def load_pose_text(self, text):
+        """Apply a stored pose as one undo step; returns what it did."""
+        editor = self._require_figure()
+        applied = scene_io.read_pose(text, editor.skeleton)
+        editor.replace_pose(applied.pose)
+        self.changed.emit()
+        return applied
+
+    def load_scene_text(self, text):
+        """Apply a stored scene, including the camera and every setting."""
+        editor = self._require_figure()
+        scene = scene_io.read_scene(text, editor.skeleton)
+        editor.replace_pose(scene.pose)
+        self.camera = scene.camera
+        self.mode = scene.mode if scene.mode in MODES else "shaded"
+        self.lines = scene.lines
+        self.opacity, self.layer_opacity = scene.opacity, scene.layer_opacity
+        self.output = scene.output
+        self.changed.emit()
+        return scene
+
+    def _require_figure(self):
+        if self.editor is None:
+            raise ValueError("Load a figure before saving or loading a pose.")
+        return self.editor
+
+
+def _clamped(value):
+    try:
+        return min(1.0, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 1.0

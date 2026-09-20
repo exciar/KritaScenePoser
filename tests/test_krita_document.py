@@ -7,18 +7,30 @@ the compatibility notes.
 import unittest
 
 from krita_scene_poser.integration.krita_document import (
-    GUIDE_LAYER_NAME, DocumentExportError, export_layer, read_document, snapshot_document,
+    GUIDE_LAYER_NAME, DocumentExportError, export_layer, find_layer, layer_id, read_document,
+    snapshot_document, update_layer,
 )
 
 PROFILE = "sRGB-elle-V2-srgbtrc.icc"
 
 
 class FakeNode:
+    counter = 0
+
     def __init__(self, name, kind="paintlayer", color=("RGBA", "U8", PROFILE)):
-        self.name, self.kind, self.color = name, kind, color
+        self.layer_name, self.kind, self.color = name, kind, color
         self.write_ok = True
         self.pixels = None
         self.parent = None
+        self.opacity = None
+        FakeNode.counter += 1
+        self.identity = "{{node-{}}}".format(FakeNode.counter)
+
+    def uniqueId(self):
+        return self.identity
+
+    def setOpacity(self, value):
+        self.opacity = value
 
     def type(self):
         return self.kind
@@ -37,6 +49,9 @@ class FakeNode:
             return False
         self.pixels = (data, x, y, width, height)
         return True
+
+    def name(self):  # Krita's Node.name() is a method, not an attribute.
+        return self.layer_name
 
     def parentNode(self):
         return self.parent
@@ -134,7 +149,7 @@ class ExportTests(unittest.TestCase):
         background = self.document.root.children[0]
         node = self.export()
         self.assertEqual(self.document.root.children, [background, node])
-        self.assertEqual(node.name, GUIDE_LAYER_NAME)
+        self.assertEqual(node.name(), GUIDE_LAYER_NAME)
         self.assertEqual(node.pixels, (self.pixels, 0, 0, 40, 33))
         self.assertIsNone(background.pixels)
         self.assertEqual(self.document.refreshes, 1)
@@ -195,9 +210,24 @@ class ExportTests(unittest.TestCase):
                     export_layer(self.document, pixels, 40, 33, name=GUIDE_LAYER_NAME, application=self.application)
         self.assertEqual(self.document.created, [])
 
-    def test_render_size_must_match_document(self):
-        with self.assertRaises(DocumentExportError):
-            self.export(bytes(41 * 33 * 4), 41, 33)
+    def test_a_render_may_be_a_different_size_than_the_document(self):
+        """Custom output sizes: the layer keeps pixels outside the canvas."""
+        pixels = bytes(41 * 20 * 4)
+        node = self.export(pixels, 41, 20, origin=(-3, 7))
+        self.assertEqual(node.pixels, (pixels, -3, 7, 41, 20))
+
+    def test_the_origin_must_be_whole_numbers(self):
+        for origin in ((1.5, 0), ("x", 0), (1, 2, 3), None):
+            with self.subTest(origin=origin):
+                with self.assertRaises(DocumentExportError):
+                    self.export(origin=origin)
+
+    def test_layer_opacity_is_applied_only_when_it_is_not_full(self):
+        node = self.export(opacity=0.5)
+        self.assertEqual(node.opacity, 128)
+        self.assertIsNone(self.export(opacity=1.0).opacity)  # Krita's own default stands.
+        self.assertEqual(self.export(opacity=-3.0).opacity, 0)
+        self.assertEqual(self.export(opacity=9.0).opacity, None)  # Clamped back to full.
 
     def test_changed_snapshot_is_rejected(self):
         snapshot = snapshot_document(self.document)
@@ -246,6 +276,69 @@ class ExportTests(unittest.TestCase):
             self.export()
         self.assertEqual(self.document.root.children, [background])
         self.assertEqual(self.document.refreshes, 1)
+
+
+class UpdateLayerTests(unittest.TestCase):
+    """Rewriting a layer KSP made earlier, instead of stacking up new ones."""
+
+    def setUp(self):
+        self.document = FakeDocument()
+        self.application = FakeApplication(self.document)
+        self.pixels = bytes(40 * 33 * 4)
+        self.node = export_layer(self.document, self.pixels, 40, 33, name=GUIDE_LAYER_NAME,
+                                 application=self.application)
+        self.target = layer_id(self.node)
+
+    def update(self, pixels=None, width=40, height=33, **options):
+        options.setdefault("application", self.application)
+        return update_layer(self.document, self.target,
+                            self.pixels if pixels is None else pixels, width, height, **options)
+
+    def test_updating_rewrites_the_same_layer_and_adds_none(self):
+        fresh = bytes(range(256)) * (40 * 33 * 4 // 256) + bytes(40 * 33 * 4 % 256)
+        node = self.update(fresh)
+        self.assertIs(node, self.node)
+        self.assertEqual(node.pixels, (fresh, 0, 0, 40, 33))
+        self.assertEqual(len(self.document.root.children), 2)  # Background plus the one layer.
+        self.assertEqual(self.document.refreshes, 2)
+
+    def test_a_new_size_and_origin_replace_the_old_pixels(self):
+        pixels = bytes(20 * 10 * 4)
+        node = self.update(pixels, 20, 10, origin=(5, -4), opacity=0.25)
+        self.assertEqual(node.pixels, (pixels, 5, -4, 20, 10))
+        self.assertEqual(node.opacity, 64)
+
+    def test_a_missing_layer_asks_the_caller_to_create_one(self):
+        self.node.remove()
+        self.assertIsNone(self.update())
+        self.assertIsNone(update_layer(self.document, "", self.pixels, 40, 33,
+                                       application=self.application))
+        self.assertIsNone(update_layer(self.document, "{node-999}", self.pixels, 40, 33,
+                                       application=self.application))
+
+    def test_a_layer_the_user_renamed_is_left_alone(self):
+        self.node.layer_name = "My lineart"
+        self.assertIsNone(self.update())
+        self.assertEqual(self.node.pixels, (self.pixels, 0, 0, 40, 33))  # Untouched.
+
+    def test_only_ksp_paint_layers_are_matched(self):
+        other = FakeNode("KSP Figure Guide", kind="grouplayer")
+        self.document.root.children.append(other)
+        self.assertIsNone(find_layer(self.document, layer_id(other)))
+
+    def test_document_checks_still_apply(self):
+        self.document.color = ("RGBA", "U8", "AdobeRGB.icc")
+        with self.assertRaisesRegex(DocumentExportError, "Convert Image Color Space"):
+            self.update()
+        self.document.color = ("RGBA", "U8", PROFILE)
+        with self.assertRaises(DocumentExportError):
+            self.update(self.pixels[:-4])  # Wrong byte count for the size.
+
+    def test_a_failed_write_is_reported_and_nothing_is_removed(self):
+        self.node.write_ok = False
+        with self.assertRaisesRegex(DocumentExportError, "could not write"):
+            self.update()
+        self.assertIn(self.node, self.document.root.children)
 
 
 if __name__ == "__main__":

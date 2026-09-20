@@ -150,6 +150,20 @@ class ShaderTests(unittest.TestCase):
             self.assertLess(depth, shot.depth_near + shot.depth_range)
         self.assertEqual(snapshot(rig.skeleton, pose, camera, 1.0, 3, grid=False).selected, 3)
 
+    def test_snapshot_carries_a_clamped_opacity(self):
+        rig, _ = load_figure("body_chan")
+        camera = OrbitCamera()
+        pose = rig.skeleton.rest_pose()
+
+        def opacity(value):
+            return snapshot(rig.skeleton, pose, camera, 1.0, opacity=value).opacity
+        self.assertEqual(opacity(0.4), 0.4)
+        self.assertEqual(opacity(5.0), 1.0)
+        self.assertEqual(opacity(-2.0), 0.0)
+        self.assertEqual(snapshot(rig.skeleton, pose, camera, 1.0).opacity, 1.0)
+        # The figure shader multiplies color by alpha, keeping output premultiplied.
+        self.assertIn("vec4(color * u_opacity, u_opacity)", FIGURE_FRAGMENT)
+
     def test_grid(self):
         points = grid_lines(extent=1.0, step=0.5)
         self.assertEqual(len(points), 5 * 12)

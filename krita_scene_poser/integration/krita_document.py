@@ -20,6 +20,8 @@ SUPPORTED_PROFILES = frozenset((
 GUIDE_LAYER_NAME = "KSP Figure Guide"
 LINEART_LAYER_NAME = "KSP Lineart"
 PROBE_LAYER_NAME = "KSP Feasibility Triangle"
+# Layers KSP may rewrite in place; anything else in the document is never touched.
+KSP_LAYER_NAMES = frozenset((GUIDE_LAYER_NAME, LINEART_LAYER_NAME, PROBE_LAYER_NAME))
 CONVERT_HINT = (
     " Convert it with Image > Convert Image Color Space… to RGB/Alpha, "
     "8-bit integer, sRGB-elle-V2-srgbtrc.icc.")
@@ -105,15 +107,8 @@ def _assert_current(document, snapshot, application):
         raise DocumentExportError("Could not confirm the destination document is still available.") from error
 
 
-def export_layer(document, bgra_bytes, width, height, *, name, snapshot=None, application=None):
-    """Add one new paint layer, returning it on success.
-
-    Pass the ``snapshot`` captured before rendering. All pixel writes are to a
-    freshly created, detached paint layer; only then is it added above the top
-    existing layer. Failed attachment/refresh removes only that newly created
-    node. The optional application argument supports pure-Python API tests.
-    Call this synchronously from the Krita UI thread.
-    """
+def _prepare(document, bgra_bytes, width, height, snapshot, application):
+    """Shared checks for writing a render into a document."""
     try:
         expected_size = validate_dimensions(width, height)
     except PixelTransferError as error:
@@ -122,12 +117,109 @@ def export_layer(document, bgra_bytes, width, height, *, name, snapshot=None, ap
         raise DocumentExportError("The render must contain exactly width * height * 4 BGRA bytes.")
     current = snapshot_document(document)
     snapshot = current if snapshot is None else snapshot
-    if current != snapshot or (width, height) != (snapshot.width, snapshot.height):
-        raise DocumentExportError("The render no longer matches the document. Render again.")
+    if current != snapshot:
+        raise DocumentExportError("The document changed while rendering. Render again.")
     if application is None:
         from krita import Krita
         application = Krita.instance()
     _assert_current(document, snapshot, application)
+    return snapshot, application
+
+
+def layer_id(node):
+    """A node's identity as text, for remembering a layer KSP created."""
+    try:
+        identifier = node.uniqueId()
+    except (AttributeError, RuntimeError):
+        return ""
+    if identifier is None:
+        return ""
+    return identifier.toString() if hasattr(identifier, "toString") else str(identifier)
+
+
+def find_layer(document, target):
+    """The KSP layer with this id, or ``None`` if it is gone.
+
+    Only layers KSP itself created are ever returned: the id must match and
+    the node must still be one of KSP's own paint layers, so a renamed or
+    replaced node is treated as gone and a new layer is created instead.
+    """
+    if not target:
+        return None
+    try:
+        root = document.rootNode()
+        children = root.childNodes() if root is not None else []
+    except (AttributeError, RuntimeError):
+        return None
+    for node in children:
+        try:
+            if layer_id(node) != target or node.type() != "paintlayer":
+                continue
+            if node.name() not in KSP_LAYER_NAMES:
+                return None  # Renamed by the user: leave it alone.
+        except (AttributeError, RuntimeError):
+            continue
+        return node
+    return None
+
+
+def update_layer(document, target, bgra_bytes, width, height, *, snapshot=None,
+                 origin=(0, 0), opacity=1.0, application=None):
+    """Rewrite the pixels of a KSP layer created earlier.
+
+    Returns the node, or ``None`` when that layer is gone and the caller
+    should create a new one instead. Never touches any other node.
+    """
+    node = find_layer(document, target)
+    if node is None:
+        return None
+    snapshot, application = _prepare(document, bgra_bytes, width, height, snapshot, application)
+    x, y = _origin(origin)
+    try:
+        if not node.setPixelData(bgra_bytes, x, y, width, height):
+            raise DocumentExportError("Krita could not write the rendered pixels.")
+        _apply_opacity(node, opacity)
+        document.refreshProjection()
+        return node
+    except Exception as error:
+        message = str(error) if isinstance(error, DocumentExportError) else (
+            "Krita could not update the KSP layer: {}".format(error))
+        raise DocumentExportError(message) from error
+
+
+def _origin(origin):
+    try:
+        x, y = origin
+    except (TypeError, ValueError) as error:
+        raise DocumentExportError("The layer origin must be two whole numbers.") from error
+    if any(isinstance(value, bool) or not isinstance(value, int) for value in (x, y)):
+        raise DocumentExportError("The layer origin must be two whole numbers.")
+    return x, y
+
+
+def _apply_opacity(node, opacity):
+    """Krita stores layer opacity as 0-255; only KSP's own layers are set."""
+    if opacity is None:
+        return
+    value = min(255, max(0, int(round(float(opacity) * 255))))
+    if value != 255:
+        node.setOpacity(value)
+
+
+def export_layer(document, bgra_bytes, width, height, *, name, snapshot=None, application=None,
+                 origin=(0, 0), opacity=1.0):
+    """Add one new paint layer, returning it on success.
+
+    Pass the ``snapshot`` captured before rendering. All pixel writes are to a
+    freshly created, detached paint layer; only then is it added above the top
+    existing layer. Failed attachment/refresh removes only that newly created
+    node. ``origin`` places the render in the document, which may be outside
+    the canvas when the output is a custom size. The optional application
+    argument supports pure-Python API tests. Call this synchronously from the
+    Krita UI thread.
+    """
+    snapshot, application = _prepare(document, bgra_bytes, width, height, snapshot, application)
+    x, y = _origin(origin)
 
     node = None
     attachment_attempted = False
@@ -141,8 +233,9 @@ def export_layer(document, bgra_bytes, width, height, *, name, snapshot=None, ap
                 snapshot.color_model, snapshot.color_depth, snapshot.color_profile):
             raise DocumentExportError("Krita created a layer with an unexpected color space.")
         _assert_current(document, snapshot, application)
-        if not node.setPixelData(bgra_bytes, 0, 0, width, height):
+        if not node.setPixelData(bgra_bytes, x, y, width, height):
             raise DocumentExportError("Krita could not write the rendered pixels.")
+        _apply_opacity(node, opacity)
         _assert_current(document, snapshot, application)
         root = document.rootNode()
         children = root.childNodes()

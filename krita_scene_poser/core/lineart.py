@@ -22,6 +22,7 @@ LIMITS = {
     "inner_width": (0.5, 20.0),
     "crease_angle": (5.0, 175.0),
     "depth_sensitivity": (0.0, 1.0),
+    "opacity": (0.0, 1.0),
 }
 TOGGLES = ("outline", "contours", "creases", "seams")
 DEPTH_MARGIN = 0.3  # Meters around joints, covering heads, hands, and feet.
@@ -34,6 +35,7 @@ class LineArtSettings:
     inner_width: float = 1.5
     crease_angle: float = 50.0  # Degrees between neighboring surface normals.
     depth_sensitivity: float = 0.5  # 0 finds only big depth jumps; 1 finds small ones.
+    opacity: float = 1.0  # Line alpha, so lines can sit lightly under a drawing.
     outline: bool = True
     contours: bool = True
     creases: bool = True
@@ -68,11 +70,16 @@ class LineArtSettings:
         return cls(**{k: v for k, v in data.items() if k in known}).validated()
 
     def rgba(self):
-        value = self.validated().color
-        return tuple(int(value[i:i + 2], 16) / 255.0 for i in (1, 3, 5)) + (1.0,)
+        settings = self.validated()
+        value = settings.color
+        return tuple(int(value[i:i + 2], 16) / 255.0 for i in (1, 3, 5)) + (settings.opacity,)
 
     def depth_threshold(self):
-        """Relative depth jump that counts as a contour: 20 % at 0, 0.5 % at 1."""
+        """Depth jump that counts as a contour, as a share of the figure's depth.
+
+        20 % of it at sensitivity 0, down to 0.5 % at 1. Relating it to the
+        figure rather than to the camera keeps contours steady while zooming.
+        """
         return 0.2 * 0.025 ** self.validated().depth_sensitivity
 
 

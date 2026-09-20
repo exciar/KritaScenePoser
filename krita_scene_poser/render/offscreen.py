@@ -57,15 +57,16 @@ class OffscreenRenderer:
             raise CapabilityError("KSP could not activate its offscreen OpenGL context.")
 
     def render(self, figure_id, mesh, snapshot, width, height, mode="shaded", lines=None,
-               keep_buffers=True):
+               keep_buffers=True, scale_to=None):
         """Top-down, premultiplied QImage of the figure on a transparent background.
 
         ``keep_buffers=False`` frees the line-art buffers afterwards (large exports).
+        ``scale_to`` scales a supersampled render down to the output size.
         """
         self._make_current()
         try:
             self.figures.set_mesh(figure_id, mesh)
-            return self.figures.render_image(snapshot, width, height, mode, lines)
+            return self.figures.render_image(snapshot, width, height, mode, lines, scale_to)
         finally:
             if not keep_buffers:
                 self.figures.release_gbuffers()

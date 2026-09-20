@@ -6,6 +6,7 @@ import unittest
 from krita_scene_poser.core.commands import PoseHistory
 from krita_scene_poser.core.editor import DRAG, RINGS, PoseEditor, display_name
 from krita_scene_poser.core.gizmo import joint_axes
+from krita_scene_poser.core.limits import clamp_rotation
 from krita_scene_poser.core.math3d import IDENTITY, Quat, Ray, Vec3, Y_AXIS, Z_AXIS
 from krita_scene_poser.core.picking import FigurePicker
 from krita_scene_poser.storage.figures import load_figure
@@ -42,6 +43,9 @@ class EditorTests(unittest.TestCase):
 
     def setUp(self):
         self.skeleton, picker = self.figures["body_chan"]
+        # Gesture geometry is checked here with rotations no body could hold;
+        # LimitedEditorTests below covers what joint limits do to a drag.
+        self.skeleton.limits_enabled = False
         self.editor = PoseEditor(self.skeleton, picker)
 
     def joint(self, name):
@@ -196,6 +200,75 @@ class EditorTests(unittest.TestCase):
         self.assertIn("IK", self.editor.hint(self.joint("foot.R")))
         self.assertEqual(display_name("index.02.R"), "Right index finger 2")
         self.assertEqual(display_name("hips"), "Hips")
+
+
+class LimitedEditorTests(EditorTests):
+    """The same editor with joint limits on, as the docker ships it."""
+
+    def setUp(self):
+        super().setUp()
+        self.skeleton.limits_enabled = True
+        self.editor = PoseEditor(self.skeleton, self.figures["body_chan"][1])
+
+    # Gesture-geometry tests from the base class assume unclamped rotation.
+    test_aim_points_the_grabbed_part_at_the_cursor = None
+    test_edge_on_ring_uses_the_screen_tangent_without_jumps = None
+    test_ik_drag_places_the_hand_and_keeps_its_orientation = None
+    test_reset_mirror_and_limb_commands = None
+
+    def elbow_bend(self):
+        """Degrees the elbow is folded; 0 is straight, and the rest pose is ~15."""
+        transforms = self.editor.transforms()
+        upper, elbow, wrist = (transforms[self.joint(name)].position
+                               for name in ("upper_arm.L", "forearm.L", "hand.L"))
+        first, second = (elbow - upper).normalized(), (wrist - elbow).normalized()
+        return math.degrees(math.acos(max(-1.0, min(1.0, first.dot(second)))))
+
+    def inverted_target(self):
+        """Where the wrist would go if the elbow folded the wrong way."""
+        transforms = self.editor.transforms()
+        forearm = transforms[self.joint("forearm.L")]
+        wrist = transforms[self.joint("hand.L")].position
+        hinge = forearm.rotation.rotate(Vec3(1.0, 0.0, 0.0))
+        return forearm.position + Quat.from_axis_angle(hinge, -1.5).rotate(
+            wrist - forearm.position)
+
+    def drag_forearm_to(self, target):
+        start, end = self.segment("forearm.L")
+        self.editor.begin_drag(self.joint("forearm.L"), (start + end) * 0.5, VIEW, 0, 0)
+        self.editor.drag(ray_to(target), 0, 0)
+        self.editor.end_drag()
+
+    def test_an_elbow_cannot_be_dragged_backwards(self):
+        self.drag_forearm_to(self.inverted_target())
+        self.assertLess(self.elbow_bend(), 25.0)  # Refused: the arm stays extended.
+        self.assertTrue(self.skeleton.at_limit(self.editor.pose, self.joint("forearm.L")))
+
+    def test_turning_limits_off_allows_the_same_drag(self):
+        target = self.inverted_target()
+        self.skeleton.limits_enabled = False
+        self.drag_forearm_to(target)
+        self.assertGreater(self.elbow_bend(), 60.0)  # Bent the wrong way, as asked.
+
+    def test_an_elbow_still_folds_the_natural_way(self):
+        transforms = self.editor.transforms()
+        forearm = transforms[self.joint("forearm.L")]
+        wrist = transforms[self.joint("hand.L")].position
+        hinge = forearm.rotation.rotate(Vec3(1.0, 0.0, 0.0))
+        self.drag_forearm_to(forearm.position + Quat.from_axis_angle(hinge, 1.5).rotate(
+            wrist - forearm.position))
+        self.assertGreater(self.elbow_bend(), 60.0)
+
+    def test_a_pose_never_holds_a_forbidden_rotation(self):
+        """Whatever the gesture, what lands in the pose is inside the limits."""
+        for name in ("forearm.L", "shin.R", "head", "hand.L"):
+            with self.subTest(joint=name):
+                index = self.joint(name)
+                self.editor.pose = self.skeleton.set_rotation(
+                    self.skeleton.rest_pose(), index, Quat.from_axis_angle(Z_AXIS, 2.6))
+                stored = self.editor.pose.rotations[index]
+                self.assertTrue(clamp_rotation(self.skeleton.limits[index], stored)
+                                .is_close(stored, 1e-9))
 
 
 if __name__ == "__main__":

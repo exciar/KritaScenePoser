@@ -15,6 +15,9 @@ GROUP = "krita_scene_poser"
 class Settings:
     diagnostic_log: bool = False
     lineart: str = ""  # LineArtSettings as JSON; empty means defaults.
+    output: str = ""  # OutputSettings as JSON.
+    workspace: str = ""  # The last scene, restored when the docker opens again.
+    joint_limits: bool = True  # Stop joints bending further than a body could.
 
 
 def _parse(text, default):
@@ -65,10 +68,25 @@ def update(settings, write=None, **changes):
     return changed
 
 
+def data_directory(*parts):
+    """A folder inside KSP's own directory in Krita's application-data folder."""
+    from krita import Krita
+    return os.path.join(Krita.getAppDataLocation(), GROUP, *parts)
+
+
 def log_directory():
     """KSP's diagnostic-log folder inside Krita's application-data folder."""
-    from krita import Krita
-    return os.path.join(Krita.getAppDataLocation(), GROUP, "logs")
+    return data_directory("logs")
+
+
+def poses_directory():
+    """Where the file dialogs start, created on demand."""
+    directory = data_directory("poses")
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError:
+        return ""  # A dialog with no starting folder still works.
+    return directory
 
 
 def _krita_reader():

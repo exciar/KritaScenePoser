@@ -15,6 +15,14 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(all((settings.outline, settings.contours, settings.creases, settings.seams)))
         self.assertGreater(settings.outline_width, settings.inner_width)
 
+    def test_opacity_becomes_the_line_alpha(self):
+        self.assertEqual(LineArtSettings(color="#ff8000", opacity=0.5).rgba()[3], 0.5)
+        self.assertEqual(LineArtSettings(opacity=4.0).validated().opacity, 1.0)
+        self.assertEqual(LineArtSettings(opacity=-1.0).validated().opacity, 0.0)
+        self.assertEqual(LineArtSettings(opacity="faint").validated().opacity, 1.0)
+        # The uniforms carry it through to the edge shader unchanged.
+        self.assertAlmostEqual(line_uniforms(LineArtSettings(opacity=0.25)).rgba[3], 0.25)
+
     def test_values_are_clamped_and_colors_validated(self):
         wild = LineArtSettings(color="red", outline_width=999, inner_width=-4,
                                crease_angle=float("nan"), depth_sensitivity=7, seams=0).validated()

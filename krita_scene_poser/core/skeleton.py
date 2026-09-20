@@ -9,7 +9,8 @@ from dataclasses import dataclass, replace
 from typing import NamedTuple
 
 from .ik import solve_two_bone
-from .math3d import IDENTITY, ZERO, Mat4, Quat, Vec3
+from .limits import at_boundary, clamp_rotation, is_hinge, limits_for
+from .math3d import IDENTITY, X_AXIS, ZERO, Mat4, Quat, Vec3
 
 MIRROR_SUFFIXES = ((".L", ".R"), ("_L", "_R"), (".l", ".r"), ("_l", "_r"))
 
@@ -81,6 +82,8 @@ class Skeleton:
         self.mirror_indices = tuple(
             self._indices.get(mirror_name(joint.name), index)
             for index, joint in enumerate(self.joints))
+        self.limits = limits_for(self)
+        self.limits_enabled = True  # Switched off from the docker's Limits toggle.
 
     def __len__(self):
         return len(self.joints)
@@ -126,6 +129,22 @@ class Skeleton:
         return tuple(world @ bind for world, bind in
                      zip(self.world_matrices(pose), self.inverse_bind))
 
+    def limit_for(self, index):
+        """The joint's limit, or ``None`` when limits are off or it has none."""
+        return self.limits[index] if self.limits_enabled else None
+
+    def set_rotation(self, pose, index, local):
+        """Set one joint's local rotation, clamped to its limit.
+
+        Every per-joint rotation goes through here, so a pose can never hold a
+        rotation its limit forbids.
+        """
+        return pose.with_rotation(index, clamp_rotation(self.limit_for(index), local))
+
+    def at_limit(self, pose, index):
+        """True when the joint is resting against one of its stops."""
+        return at_boundary(self.limit_for(index), pose.rotations[index])
+
     def local_rotation_for(self, pose, index, world_rotation, transforms=None):
         """Pose rotation that gives joint ``index`` the requested world rotation."""
         transforms = transforms or self.transforms(pose)
@@ -137,33 +156,68 @@ class Skeleton:
         """Apply a world-space rotation to one joint, as a gizmo drag does."""
         transforms = self.transforms(pose)
         target = delta * transforms[index].rotation
-        return pose.with_rotation(index, self.local_rotation_for(pose, index, target, transforms))
+        return self.set_rotation(pose, index, self.local_rotation_for(
+            pose, index, target, transforms))
 
-    def solve_ik(self, pose, end, target, pole=None, keep_end_rotation=True):
+    def solve_ik(self, pose, end, target, pole=None, keep_end_rotation=True, passes=4):
         """Move joint ``end`` (a wrist or ankle) toward ``target`` with two-bone IK.
 
         Rotates the end's parent and grandparent. Returns ``(pose, reached)``.
         By default the end keeps its world rotation, so a planted foot stays flat.
+
+        When a joint limit holds the middle bone back, the solve repeats so the
+        upper bone takes up the slack; without limits one pass is exact and the
+        loop stops there.
         """
         end_index = self.index(end) if isinstance(end, str) else end
         middle_index = self.joints[end_index].parent
         upper_index = self.joints[middle_index].parent if middle_index >= 0 else -1
         if upper_index < 0:
             raise ValueError("Two-bone IK needs a joint with a parent and grandparent.")
-        before = self.transforms(pose)
-        root = before[upper_index].position
-        solution = solve_two_bone(root, before[middle_index].position,
-                                  before[end_index].position, target, pole)
-        pose = self.rotate_world(pose, upper_index, Quat.between(
-            before[middle_index].position - root, solution.middle - root))
-        after = self.transforms(pose)
-        middle = after[middle_index].position
-        pose = self.rotate_world(pose, middle_index, Quat.between(
-            after[end_index].position - middle, solution.end - middle))
+        start = self.transforms(pose)
+        hinged = is_hinge(self.limit_for(middle_index))
+        best, best_error, reached = pose, None, False
+        for _ in range(max(1, passes)):
+            before = self.transforms(pose)
+            root = before[upper_index].position
+            bend_pole = self._hinge_pole(before, middle_index, root, pole) if hinged else pole
+            solution = solve_two_bone(root, before[middle_index].position,
+                                      before[end_index].position, target, bend_pole)
+            pose = self.rotate_world(pose, upper_index, Quat.between(
+                before[middle_index].position - root, solution.middle - root))
+            after = self.transforms(pose)
+            middle = after[middle_index].position
+            pose = self.rotate_world(pose, middle_index, Quat.between(
+                after[end_index].position - middle, solution.end - middle))
+            # A limit may have blocked part of the rotation; check where the end landed.
+            placed = self.transforms(pose)[end_index].position
+            reached = solution.reached and placed.is_close(solution.end, 1e-7)
+            error = (placed - solution.end).length()
+            if best_error is None or error < best_error:
+                best, best_error = pose, error
+            if reached or not self.limits_enabled:
+                break
+            # Later passes let the upper bone take up what a limit refused, but
+            # they can also overshoot, so the closest pass is the one kept.
+            reached = False
+        pose = best
         if keep_end_rotation:
-            pose = pose.with_rotation(end_index, self.local_rotation_for(
-                pose, end_index, before[end_index].rotation))
-        return pose, solution.reached
+            pose = self.set_rotation(pose, end_index, self.local_rotation_for(
+                pose, end_index, start[end_index].rotation))
+        return pose, reached
+
+    def _hinge_pole(self, transforms, middle_index, root, pole):
+        """A pole in the plane an elbow or knee can actually bend in.
+
+        A hinge turns about its own axis, so any bend the pole asks for outside
+        that plane is unreachable and would be clamped away. Dropping the part
+        along the hinge axis keeps the requested bend as close as the joint can
+        manage, and the upper bone's own rotation still follows the pole.
+        """
+        axis = transforms[middle_index].rotation.rotate(X_AXIS)
+        wanted = (pole - root) if pole is not None else (transforms[middle_index].position - root)
+        flat = wanted - axis * wanted.dot(axis)
+        return root + flat if flat.length() > 1e-6 else pole
 
     def mirror_pose(self, pose, joints=None):
         """Mirror across the YZ plane, using the counterpart of each joint.
@@ -191,7 +245,7 @@ class Skeleton:
             if index in targets:
                 source = self.mirror_indices[index]
                 rotation = mirror_rotation(deltas[source]) * self.rest_transforms[index].rotation
-                rotations[index] = (joint.rotation.inverse() * parent_rotation.inverse()
-                                    * rotation).normalized()
+                rotations[index] = clamp_rotation(self.limit_for(index), (
+                    joint.rotation.inverse() * parent_rotation.inverse() * rotation).normalized())
             world.append(parent_rotation * joint.rotation * rotations[index])
         return replace(result, rotations=tuple(rotations))

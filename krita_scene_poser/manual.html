@@ -6,11 +6,11 @@
 </head>
 <body>
   <h1>KSP — Krita Scene Poser</h1>
-  <p><strong>Version 0.0.5 — early development build.</strong> Pose the Body-chan or
-  Body-kun figure in the docker or directly on the canvas, then create a transparent
-  line-art layer or shaded guide layer from it. Pose files, presets, and importing your
-  own models are not implemented yet. Compatibility is verified only on Krita 5.3.3 for
-  Windows.</p>
+  <p><strong>Version 0.0.6 — early development build.</strong> Pose the Body-chan or
+  Body-kun figure in the docker or directly on the canvas, save and reload poses, and
+  create a transparent line-art layer or shaded guide layer from the result. Body-shape
+  sliders and importing your own models are not implemented yet. Compatibility is
+  verified only on Krita 5.3.3 for Windows.</p>
   <h2>Pose a figure</h2>
   <p>Choose a figure at the top of the docker; switching keeps the pose. Click a body part
   to select it; the hint line explains what dragging it does.</p>
@@ -25,7 +25,21 @@
     <li><strong>Edits:</strong> Esc cancels a drag; Ctrl+Z and Ctrl+Shift+Z undo and redo
     poses while the viewport has focus; R resets the selected joint. Buttons reset or
     mirror the pose and copy a limb to the other side.</li>
+    <li><strong>Joint limits</strong> (Pose tab, on by default): elbows and knees cannot
+    bend backwards, and other joints keep to a plausible range. The hint line says when a
+    joint is against a stop. Dragging a hand or foot may stop short of the cursor because
+    a real limb would. Turn limits off for exaggerated poses.</li>
+    <li><strong>Figure opacity</strong> (Pose tab) fades the figure in the viewport, on
+    the canvas, and in the guide layer.</li>
   </ul>
+  <h2>Poses and scenes</h2>
+  <p>The <strong>Scene</strong> tab holds nine bundled poses: choose one and press
+  <strong>Apply Pose</strong>, which is a single undo step. <strong>Save Pose…</strong>
+  and <strong>Load Pose…</strong> store just the pose, keyed by joint name, so a pose
+  saved on one figure suits the other. <strong>Save Scene…</strong> and
+  <strong>Load Scene…</strong> also keep the camera, view mode, line-art settings,
+  opacities, and output size. KSP restores your last pose and settings when the docker
+  opens again; that is kept with Krita's settings, not in your document.</p>
   <h2>Pose on the canvas</h2>
   <p><strong>Show on Canvas</strong> (Pose tab) draws the figure on the canvas where the
   Create buttons would place it; it follows canvas zoom, rotation, mirror, and pan. <strong>Pose on Canvas</strong>
@@ -45,10 +59,16 @@
   <p>The canvas preview shows the exact line weight of the layer; the docker viewport
   shows widths in screen pixels.</p>
   <h2>Create layers</h2>
-  <p>In the <strong>Output</strong> tab, <strong>Create Lineart Layer</strong> adds a new
-  transparent "KSP Lineart" paint layer, and <strong>Create Guide Layer</strong> adds a new
-  transparent "KSP Figure Guide" layer with the shaded figure. Both render from the current
-  view at the document's size, and both always add a new layer, never replacing one.</p>
+  <p>In the <strong>Output</strong> tab, <strong>Create Lineart Layer</strong> adds a
+  transparent "KSP Lineart" paint layer and <strong>Create Guide Layer</strong> adds a
+  transparent "KSP Figure Guide" layer with the shaded figure, both rendered from the
+  current view.</p>
+  <p>The same tab sets the output: the document's size or a custom size placed centered
+  or at the top left (pixels outside the canvas stay in the layer), a quality of 1×, 2×
+  or 4× that renders larger and scales down for smoother edges, and the opacity of the
+  layer KSP creates. <strong>Update the layer I made last</strong> rewrites your previous
+  KSP layer in this document instead of adding another; if it is gone or you renamed it,
+  KSP leaves it alone and creates a new one.</p>
   <h2>Your own models</h2>
   <p>Importing your own figures from <code>.glb</code> or <code>.blend</code> files is
   planned. The KSP source repository's <code>docs/custom-figures.md</code> explains how to
@@ -69,6 +89,7 @@
   <h2>Menu actions and shortcuts</h2>
   <p>Tools → Scripts contains <strong>KSP: Show Scene Poser</strong>,
   <strong>KSP: Create Guide Layer</strong>, <strong>KSP: Create Lineart Layer</strong>,
+  <strong>KSP: Save Pose…</strong>, <strong>KSP: Load Pose…</strong>,
   <strong>KSP: Pose on Canvas</strong>, and <strong>KSP: Diagnostic Log</strong>. They have
   no default shortcuts, so they never clash with Krita's. To assign keys, open
   Settings → Configure Krita → Keyboard Shortcuts and search for "KSP".</p>

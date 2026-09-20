@@ -302,7 +302,6 @@ def main(args=None):
         # Line art on this GPU: G-buffers, edge pass, widths, and toggles.
         from krita_scene_poser.core.camera import OrbitCamera
         from krita_scene_poser.core.lineart import LineArtSettings, line_uniforms
-        from krita_scene_poser.core.math3d import Quat, X_AXIS, Y_AXIS, Z_AXIS
         from krita_scene_poser.render.shaders import snapshot
         from krita_scene_poser.storage.figures import load_figure
         from PyQt5.QtGui import QColor, QImage, QPainter
@@ -310,12 +309,10 @@ def main(args=None):
         rig, mesh = load_figure("body_kun")
         renderer.set_mesh("body_kun", mesh)
         skeleton = rig.skeleton
-        # The right forearm crosses in front of the belly, so contours are needed.
-        arm = skeleton.index("upper_arm.R")
-        pose = skeleton.rotate_world(skeleton.rest_pose(), arm, Quat.from_axis_angle(Z_AXIS, 0.7))
-        pose = skeleton.rotate_world(pose, arm, Quat.from_axis_angle(X_AXIS, -0.3))
-        pose = skeleton.rotate_world(pose, skeleton.index("forearm.R"),
-                                     Quat.from_axis_angle(Y_AXIS, 1.0))
+        # A bundled pose holds both forearms across the body, which is exactly
+        # what contour lines are for: one part passing in front of another.
+        from krita_scene_poser.storage.presets import load_preset
+        pose = load_preset("hands-clasped", skeleton).pose
         camera = OrbitCamera(pitch=0.05, yaw=0.35)
         camera.frame([j.position for j in rig.joints] + [j.tail for j in rig.joints])
         width, height = 360, 540
@@ -364,7 +361,10 @@ def main(args=None):
         }
         failed = [name for name, ok in checks.items() if not ok]
         if failed:
-            raise RuntimeError("Line-art checks failed: " + ", ".join(failed))
+            raise RuntimeError("Line-art checks failed: {}; ink all={:.0f} outline={:.0f} "
+                               "outline+contours={:.0f} thin={:.0f} thick={:.0f}".format(
+                                   ", ".join(failed), ink(lines), thin_default, with_contours,
+                                   thin, thick))
 
         start = time.perf_counter()
         large = renderer.render_image(snapshot(skeleton, pose, camera, 1.0, grid=False),
@@ -392,6 +392,136 @@ def main(args=None):
                            "outline_and_contours": round(with_contours)},
                 "lines_render_s": round(seconds, 3), "lines_2048_s": round(large_seconds, 3),
                 "preview": os.path.basename(saved) if saved else None}
+
+    def render_opacity():
+        # A half-opaque figure must read back half-transparent, with its colors
+        # unchanged: proof the premultiplied contract survives the new uniform.
+        from krita_scene_poser.core.camera import OrbitCamera
+        from krita_scene_poser.render.shaders import snapshot
+        from krita_scene_poser.storage.figures import load_figure
+        renderer = state["figure_renderer"]
+        rig, mesh = load_figure("body_kun")
+        renderer.set_mesh("body_kun", mesh)
+        skeleton = rig.skeleton
+        camera = OrbitCamera(pitch=0.0)
+        camera.frame([j.position for j in rig.joints] + [j.tail for j in rig.joints])
+        width, height = 240, 360
+        pose = skeleton.rest_pose()
+
+        def render(opacity):
+            shot = snapshot(skeleton, pose, camera, width / height, grid=False, opacity=opacity)
+            return qimage_to_bgra(renderer.render_image(shot, width, height))
+
+        solid, half, clear = render(1.0), render(0.5), render(0.0)
+        torso = ((height * 35 // 100) * width + width // 2) * 4
+        checks = {
+            "opaque_figure_unchanged": solid[torso + 3] == 255,
+            "half_alpha": 120 <= half[torso + 3] <= 136,
+            # Straight alpha: un-premultiplying must give back the same color.
+            "color_kept": all(abs(a - b) <= 3 for a, b in
+                              zip(solid[torso:torso + 3], half[torso:torso + 3])),
+            "zero_opacity_is_invisible": max(clear[3::4]) == 0,
+            "corners_transparent": solid[3] == 0,
+        }
+        failed = [name for name, ok in checks.items() if not ok]
+        if failed:
+            raise RuntimeError("Opacity checks failed: {}; torso alpha solid={} half={} "
+                               "colors {} vs {}".format(
+                                   ", ".join(failed), solid[torso + 3], half[torso + 3],
+                                   list(solid[torso:torso + 3]), list(half[torso:torso + 3])))
+        return {"checks": checks, "torso_alpha": [solid[torso + 3], half[torso + 3]],
+                "torso_color": list(solid[torso:torso + 3])}
+
+    def apply_presets():
+        # Every bundled pose loads in Krita's own Python, on both figures.
+        from krita_scene_poser.storage.figures import load_figure
+        from krita_scene_poser.storage.presets import available_presets, load_preset
+        presets, problems = available_presets()
+        if problems:
+            raise RuntimeError("Presets could not be read: {}".format(problems))
+        if not presets:
+            raise RuntimeError("No bundled poses were found")
+        result = {}
+        for figure in ("body_chan", "body_kun"):
+            rig, _ = load_figure(figure)
+            applied = {}
+            for preset, label in presets:
+                outcome = load_preset(preset, rig.skeleton)
+                if outcome.unknown:
+                    raise RuntimeError("{} has joints {} lacks: {}".format(
+                        preset, figure, outcome.unknown))
+                applied[preset] = len(outcome.applied)
+            result[figure] = applied
+        return {"presets": [preset for preset, _ in presets], "joints_applied": result}
+
+    def export_custom_size(target):
+        # A layer that is not the document's size, placed by its anchor, with
+        # pixels kept outside the canvas.
+        from krita_scene_poser.core.output import OutputSettings
+        from krita_scene_poser.integration.krita_document import export_layer as write_layer
+        document = target["document"]
+        snapshot = snapshot_document(document)
+        outcomes = {}
+        for label, settings in (
+                ("smaller_centered", OutputSettings(mode="custom", width=120, height=90)),
+                ("larger_topleft", OutputSettings(mode="custom", width=320, height=260,
+                                                  anchor="topleft")),
+                ("oversize_rejected", OutputSettings(mode="custom", width=4000, height=4000,
+                                                     supersample=2))):
+            try:
+                plan = settings.resolve(snapshot.width, snapshot.height)
+            except Exception as error:
+                outcomes[label] = "rejected: {}".format(error)
+                continue
+            pixels = bytes(plan.width * plan.height * 4)
+            node = write_layer(document, pixels, plan.width, plan.height,
+                               name="KSP Figure Guide", snapshot=snapshot,
+                               origin=plan.origin, opacity=0.6,
+                               application=ProbeApplication(document))
+            document.waitForDone()
+            outcomes[label] = {"size": [plan.width, plan.height], "origin": list(plan.origin),
+                               "opacity": node.opacity()}
+        if "rejected" not in str(outcomes["oversize_rejected"]):
+            raise RuntimeError("An oversized render was accepted: {}".format(outcomes))
+        if outcomes["smaller_centered"]["origin"] != [(snapshot.width - 120) // 2,
+                                                      (snapshot.height - 90) // 2]:
+            raise RuntimeError("A centered layer landed at {}".format(outcomes))
+        if outcomes["larger_topleft"]["opacity"] not in range(150, 157):
+            raise RuntimeError("Layer opacity was not applied: {}".format(outcomes))
+        return outcomes
+
+    def export_update_layer(target):
+        # The second render rewrites the same node instead of stacking layers.
+        from krita_scene_poser.integration.krita_document import (
+            layer_id, update_layer as rewrite_layer,
+        )
+        document = target["document"]
+        snapshot = snapshot_document(document)
+        width, height = 64, 48
+        application = ProbeApplication(document)
+        first = export_layer(document, bytes(width * height * 4), width, height,
+                             name="KSP Lineart", snapshot=snapshot, application=application)
+        document.waitForDone()
+        before = len(document.rootNode().childNodes())
+        target_id = layer_id(first)
+        fresh = bytes([200, 100, 50, 255]) * (width * height)
+        node = rewrite_layer(document, target_id, fresh, width, height, snapshot=snapshot,
+                             application=application)
+        document.waitForDone()
+        if node is None:
+            raise RuntimeError("The layer KSP had just created was not found")
+        if len(document.rootNode().childNodes()) != before:
+            raise RuntimeError("Updating added a layer instead of rewriting one")
+        stored = bytes(node.pixelData(0, 0, width, height))
+        if stored != fresh:
+            raise RuntimeError("The updated layer does not hold the new pixels")
+        # A layer the user renamed is left alone, and a new one is created instead.
+        node.setName("My own lineart")
+        document.waitForDone()
+        refused = rewrite_layer(document, target_id, bytes(width * height * 4), width, height,
+                                snapshot=snapshot, application=application)
+        return {"same_node": layer_id(node) == target_id, "layer_count": before,
+                "renamed_layer_refused": refused is None}
 
     def offscreen_renderer():
         # KSP's own context, as used by the canvas overlay, Create Layer, and Self-Test.
@@ -474,6 +604,7 @@ def main(args=None):
             _run(report, "time_large_render", time_large_render)
         if _run(report, "render_figure", render_figure) is not None:
             _run(report, "render_lineart", render_lineart)
+            _run(report, "render_opacity", render_opacity)
     _run(report, "offscreen_renderer", offscreen_renderer)
     state["documents"] = []
     for profile in EXPORT_PROFILES:
@@ -482,8 +613,13 @@ def main(args=None):
                 lambda: export_step(profile, target)) is not None:
             _run(report, "check_projection[{}]".format(profile),
                  lambda: check_projection(target))
+    size_target = {}
+    if _run(report, "export_layer_for_sizes", lambda: export_step(PROFILE, size_target)) is not None:
+        _run(report, "export_custom_size", lambda: export_custom_size(size_target))
+        _run(report, "export_update_layer", lambda: export_update_layer(size_target))
     _run(report, "reject_unsupported_documents", reject_unsupported_documents)
     _run(report, "load_figures", load_figures)
+    _run(report, "apply_presets", apply_presets)
 
     for document in state["documents"]:
         _close(document)
