@@ -6,11 +6,11 @@
 </head>
 <body>
   <h1>KSP — Krita Scene Poser</h1>
-  <p><strong>Version 0.0.7 — early development build.</strong> Pose the Body-chan or
-  Body-kun figure in the docker or directly on the canvas, reshape its body, save and
-  reload poses, and create a transparent line-art layer or shaded guide layer from the
-  result. Importing your own models is not implemented yet. Compatibility is verified
-  only on Krita 5.3.3 for Windows.</p>
+  <p><strong>Version 0.0.8 — early development build.</strong> Pose the Body-chan or
+  Body-kun figure in the docker or directly on the canvas, reshape its body, import your
+  own rigged figures, save and reload poses, and create a transparent line-art layer or
+  shaded guide layer from the result. Compatibility is verified only on Krita 5.3.3 for
+  Windows.</p>
   <h2>Pose a figure</h2>
   <p>Choose a figure at the top of the docker; switching keeps the pose. Click a body part
   to select it; the hint line explains what dragging it does.</p>
@@ -79,9 +79,15 @@
   KSP layer in this document instead of adding another; if it is gone or you renamed it,
   KSP leaves it alone and creates a new one.</p>
   <h2>Your own models</h2>
-  <p>Importing your own figures from <code>.glb</code> or <code>.blend</code> files is
-  planned. The KSP source repository's <code>docs/custom-figures.md</code> explains how to
-  prepare a model for it.</p>
+  <p>In the <strong>Scene</strong> tab, <strong>Import Figure…</strong> adds your own
+  rigged figure from a <code>.glb</code>, <code>.vrm</code> or <code>.blend</code> file.
+  Bone names from Rigify, Mixamo, VRM and Blender's metarig are recognized; any other rig
+  needs a small <code>&lt;model&gt;.ksp-map.json</code> file beside the model. Save
+  <code>.blend</code> files with Compress turned off.</p>
+  <p>KSP turns the figure upright and forward, stands it on the ground, keeps its size
+  unless that size is implausible, and reports what it matched. Imported figures join the
+  figure list and are stored in Krita's application-data folder; your original file is
+  never changed. The repository's <code>docs/custom-figures.md</code> has the details.</p>
   <h2>Open KSP</h2>
   <p>Enable KSP in Settings → Configure Krita → Python Plugin Manager, restart
   Krita, then open Settings → Dockers → KSP — Krita Scene Poser.</p>

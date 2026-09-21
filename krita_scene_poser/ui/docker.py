@@ -31,7 +31,9 @@ from ..storage.figures import DEFAULT_FIGURE, available_figures, load_figure
 from ..storage.mesh_io import MeshFormatError
 from ..storage.presets import available_presets
 from ..storage.rig_io import RigFormatError
+from ..storage.import_figure import FigureImportError
 from ..storage.scene_io import SceneFormatError
+from . import import_figure as figure_import
 from . import scene_files
 from .canvas_overlay import CanvasController
 from .session import PoseSession
@@ -40,7 +42,8 @@ from .viewport import FigureViewport
 DOCKER_ID = "krita_scene_poser"
 TITLE = "KSP — Krita Scene Poser"
 EXPECTED_ERRORS = (CapabilityError, DocumentExportError, PixelTransferError,
-                   MeshFormatError, RigFormatError, SceneFormatError, OutputSizeError)
+                   MeshFormatError, RigFormatError, SceneFormatError, OutputSizeError,
+                   FigureImportError)
 WORKSPACE_DELAY = 1500  # Milliseconds of quiet before the workspace is stored.
 SHAPE_DELAY = 200  # Milliseconds of quiet before a new body shape is built.
 NO_DOCUMENT = "Open or create a document to create a KSP layer."
@@ -404,6 +407,11 @@ class KSPDocker(DockWidget):
             button.setToolTip(tip)
             button.clicked.connect(lambda checked=False, run=action: self._run_file_action(run))
             grid.addWidget(button, 1 + index // 2, index % 2)
+        import_button = QPushButton("Import Figure\u2026")
+        import_button.setToolTip("Add your own rigged figure from a .glb, .vrm, or .blend "
+                                 "file. It joins the figure list and stays there.")
+        import_button.clicked.connect(self.import_figure)
+        grid.addWidget(import_button, 3, 0, 1, 2)
         page = QWidget()
         page.setLayout(grid)
         return page
@@ -433,14 +441,14 @@ class KSPDocker(DockWidget):
         if problems:
             self._show_status("Some poses could not be read: " + "; ".join(problems))
 
-    def _populate_figures(self):
-        figures, problems = available_figures()
+    def _populate_figures(self, select=None):
+        figures, problems = available_figures(folders=figure_import.folders())
         self.figure_box.blockSignals(True)
         self.figure_box.clear()
         for figure, name in figures:
             self.figure_box.addItem(name, figure)
-        default = self.figure_box.findData(DEFAULT_FIGURE)
-        self.figure_box.setCurrentIndex(max(default, 0))
+        wanted = self.figure_box.findData(select or DEFAULT_FIGURE)
+        self.figure_box.setCurrentIndex(max(wanted, 0))
         self.figure_box.blockSignals(False)
         if problems:
             self._show_status("Some figures could not be read: " + "; ".join(problems))
@@ -456,7 +464,7 @@ class KSPDocker(DockWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             if figure not in self.figures:
-                self.figures[figure] = load_figure(figure)
+                self.figures[figure] = load_figure(figure, folders=figure_import.folders())
             rig, mesh = self.figures[figure]
             self.session.set_figure(figure, rig, mesh)
             self._show_status("{} ready.".format(rig.display_name))
@@ -623,6 +631,34 @@ class KSPDocker(DockWidget):
             self._refresh_document_state()
         except Exception as error:
             self._show_status(describe(error))
+
+    def import_figure(self, *unused):
+        """Read a model the user picks, and add it to the figure list."""
+        try:
+            self.ensure_loaded()
+            path = figure_import.choose_file(self)
+            if not path:
+                return
+        except Exception as error:
+            self._show_status(describe(error))
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        started = time.perf_counter()
+        try:
+            known = {figure for figure, _ in
+                     available_figures(folders=figure_import.folders())[0]}
+            figure, message = figure_import.import_file(path, known)
+            log.event("figure_imported", seconds=round(time.perf_counter() - started, 3))
+        except OSError as error:
+            self._show_status("The file could not be read: {}".format(error))
+        except Exception as error:
+            self.last_error = error
+            self._show_status("The figure was not imported. " + describe(error))
+        else:
+            self._populate_figures(select=figure)
+            self._show_status(message)
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def save_pose(self):
         """Also used by the KSP: Save Pose menu action."""

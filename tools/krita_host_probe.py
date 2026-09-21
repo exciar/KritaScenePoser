@@ -483,6 +483,78 @@ def main(args=None):
         renderer.set_mesh("body_kun", mesh)  # Leave the cache on the plain figure.
         return {"checks": checks, "shapes": results}
 
+    def import_figure():
+        # A figure imported in Krita's own Python must convert, save, load back,
+        # and render on the GPU exactly like a bundled one.
+        import tempfile
+        from krita_scene_poser.core.camera import OrbitCamera
+        from krita_scene_poser.render.shaders import snapshot
+        from krita_scene_poser.storage.figures import figure_id, load_figure as read_figure
+        from krita_scene_poser.storage.figures import write_figure
+        from krita_scene_poser.storage.import_figure import FigureImportError, convert, describe
+        from krita_scene_poser.storage.import_glb import read_glb
+        here = os.path.dirname(os.path.dirname(os.path.abspath(
+            sys.modules["krita_scene_poser"].__file__)))
+        fixtures = os.path.join(here, "tests")
+        if fixtures not in sys.path:
+            sys.path.insert(0, fixtures)
+        from glb_fixtures import simple_glb  # A model built in the tests, not shipped.
+
+        start = time.perf_counter()
+        rig, mesh, report = convert(read_glb(simple_glb(), "probe.glb"), "probe_figure",
+                                    "Probe figure")
+        converted = time.perf_counter() - start
+        folder = tempfile.mkdtemp(prefix="ksp-import-")
+        try:
+            name = figure_id("Probe figure")
+            write_figure(folder, name, rig, mesh)
+            stored_rig, stored_mesh = read_figure(name, folders=[folder])
+            if len(stored_rig.joints) != len(rig.joints):
+                raise RuntimeError("The saved figure did not read back with its joints")
+            renderer = state["figure_renderer"]
+            renderer.set_mesh("probe_figure", stored_mesh)
+            skeleton = stored_rig.skeleton
+            camera = OrbitCamera(pitch=0.0)
+            camera.frame([joint.position for joint in stored_rig.joints])
+            width, height = 200, 300
+            shot = snapshot(skeleton, skeleton.rest_pose(), camera, width / height, grid=False)
+            pixels = qimage_to_bgra(renderer.render_image(shot, width, height))
+            covered = sum(1 for alpha in pixels[3::4] if alpha)
+        finally:
+            for entry in os.listdir(folder):
+                os.remove(os.path.join(folder, entry))
+            os.rmdir(folder)
+
+        # A compressed .blend cannot be read by Krita's Python, and must say so.
+        compressed = os.path.join(here, "bodychan-bodykun.blend")
+        zstd_message = ""
+        if os.path.isfile(compressed):
+            from krita_scene_poser.storage.import_blend import read_blend
+            try:
+                read_blend(compressed, "bodychan-bodykun.blend")
+            except FigureImportError as error:
+                zstd_message = str(error)
+            except Exception as error:  # noqa: BLE001  Anything else is a real fault.
+                raise RuntimeError("A compressed .blend raised {}: {}".format(
+                    type(error).__name__, error))
+        checks = {
+            "converts": report["joints"] >= 20,
+            "saves_and_loads": True,
+            "renders": covered > 500,
+            "on_the_ground": abs(min(stored_mesh.positions[1::3])) < 1e-4,
+            "compressed_blend_explained": (not zstd_message
+                                           or "compress" in zstd_message.lower()
+                                           or "3.14" in zstd_message),
+        }
+        failed = [name for name, ok in checks.items() if not ok]
+        if failed:
+            raise RuntimeError("Import checks failed: {}; {}".format(", ".join(failed), report))
+        return {"checks": checks, "report": {k: v for k, v in report.items()
+                                             if k != "missing"},
+                "convert_s": round(converted, 3), "coverage_px": covered,
+                "message": describe(report, "Probe figure"),
+                "compressed_blend": zstd_message}
+
     def apply_presets():
         # Every bundled pose loads in Krita's own Python, on both figures.
         from krita_scene_poser.storage.figures import load_figure
@@ -657,6 +729,7 @@ def main(args=None):
             _run(report, "render_lineart", render_lineart)
             _run(report, "render_opacity", render_opacity)
             _run(report, "render_shape", render_shape)
+            _run(report, "import_figure", import_figure)
     _run(report, "offscreen_renderer", offscreen_renderer)
     state["documents"] = []
     for profile in EXPORT_PROFILES:

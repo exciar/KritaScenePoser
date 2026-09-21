@@ -1,6 +1,6 @@
 # KSP — Krita Scene Poser: feature list
 
-Version 0.0.7.
+Version 0.0.8.
 
 ## Figures
 
@@ -36,6 +36,32 @@ Version 0.0.7.
 - Figure stays on the ground
 - Reset Shape
 - Shape stored in scene files and the restored workspace
+
+## Your own figures
+
+- `.glb` import
+- `.vrm` import
+- `.blend` import (classic and newer container layouts)
+- Rigify bone names recognized
+- Blender metarig bone names recognized
+- Mixamo bone names recognized
+- VRM humanoid names recognized
+- VRM humanoid table read from the file
+- Custom `<model>.ksp-map.json` bone map
+- Import Figure… in the Scene tab
+- Automatic axis conversion
+- Automatic facing detection and correction
+- Automatic size check, with scaling to human height when needed
+- Automatic grounding
+- Normals computed when a file has none, with hard edges kept
+- Weights reduced to the four strongest per vertex
+- Unmapped bones follow their nearest mapped parent
+- Partial rigs supported (only hips required)
+- Imported figures join the figure list
+- Imported figures stored in Krita's application-data folder
+- Original file never modified
+- Size, vertex, triangle, part and bone caps
+- Plain-language messages for compressed, split, or unsupported files
 
 ## Posing — drag mode
 
@@ -187,20 +213,6 @@ Version 0.0.7.
 - No third-party dependencies
 
 # Next versions
-
-## 0.0.8 — your own figures
-
-- `.glb` import
-- `.vrm` import
-- `.blend` import (old and new Blender formats)
-- Rigify bone names recognized
-- Mixamo bone names recognized
-- VRM bone names recognized
-- Custom bone map file
-- Import Figure… button
-- Imported figures in the Krita resource folder
-- Partial rigs supported
-- Import checks with plain-language messages
 
 ## Later
 
