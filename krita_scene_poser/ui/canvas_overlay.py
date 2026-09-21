@@ -371,7 +371,7 @@ class CanvasController(QObject):
                             editor.selected if self.posing else None, grid=self.posing,
                             opacity=session.opacity)
             # Widths are document pixels; this preview may be smaller than the document.
-            image = self.offscreen.render(session.figure_id, session.mesh, shot, w, h,
+            image = self.offscreen.render(session.mesh_key, session.mesh, shot, w, h,
                                           session.mode, line_uniforms(session.lines, w / width))
             overlay.rendered_size = size
             overlay.set_image(image, (width / w, height / h))

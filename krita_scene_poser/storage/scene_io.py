@@ -26,6 +26,7 @@ from ..core.camera import OrbitCamera
 from ..core.lineart import LineArtSettings
 from ..core.math3d import IDENTITY, ZERO, Quat, Vec3
 from ..core.output import OutputSettings
+from ..core.shape import BodyShape
 
 POSE_FORMAT, SCENE_FORMAT, VERSION = "ksp-pose", "ksp-scene", 1
 MODES = ("shaded", "lines", "both")
@@ -154,7 +155,7 @@ def apply_pose(data, skeleton):
 
 
 def write_scene(skeleton, pose, *, figure="", camera=None, mode="shaded", lines=None,
-                opacity=1.0, layer_opacity=1.0, output=None):
+                opacity=1.0, layer_opacity=1.0, output=None, shape=None):
     """A full scene: the pose plus everything else the docker is showing."""
     document = pose_document(skeleton, pose, figure)
     document["format"] = SCENE_FORMAT
@@ -164,6 +165,7 @@ def write_scene(skeleton, pose, *, figure="", camera=None, mode="shaded", lines=
     document["opacity"] = _clamped(opacity)
     document["layer_opacity"] = _clamped(layer_opacity)
     document["output"] = json.loads((output or OutputSettings()).to_json())
+    document["shape"] = json.loads((shape or BodyShape()).to_json())
     text = json.dumps(document, indent=1, sort_keys=True) + "\n"
     read_scene(text, skeleton)
     return text
@@ -173,7 +175,7 @@ class Scene:
     """A loaded scene. Every field falls back to a default if the file lacks it."""
 
     def __init__(self, applied, figure="", camera=None, mode="shaded", lines=None,
-                 opacity=1.0, layer_opacity=1.0, output=None):
+                 opacity=1.0, layer_opacity=1.0, output=None, shape=None):
         self.applied = applied
         self.pose = applied.pose
         self.figure = figure
@@ -183,6 +185,7 @@ class Scene:
         self.opacity = opacity
         self.layer_opacity = layer_opacity
         self.output = output or OutputSettings()
+        self.shape = shape or BodyShape()
 
 
 def read_scene(text, skeleton):
@@ -196,7 +199,8 @@ def read_scene(text, skeleton):
         lines=LineArtSettings.from_json(json.dumps(data.get("lines"))),
         opacity=_clamped(data.get("opacity", 1.0)),
         layer_opacity=_clamped(data.get("layer_opacity", 1.0)),
-        output=OutputSettings.from_json(json.dumps(data.get("output"))))
+        output=OutputSettings.from_json(json.dumps(data.get("output"))),
+        shape=BodyShape.from_json(json.dumps(data.get("shape"))))
 
 
 def _clamped(value):

@@ -1,6 +1,6 @@
 """KSP: Krita Scene Poser. Pure modules remain importable outside Krita."""
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 try:
     import krita

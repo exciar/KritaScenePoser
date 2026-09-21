@@ -6,7 +6,10 @@ from ..core.camera import OrbitCamera
 from ..core.editor import DRAG, RINGS, PoseEditor
 from ..core.lineart import LineArtSettings
 from ..core.output import OutputSettings
+from ..core.picking import FigurePicker
+from ..core.shape import BodyShape
 from ..storage import scene_io
+from ..storage.shaping import figure_key, shaped_figure
 
 MODES = ("shaded", "lines", "both")
 
@@ -22,6 +25,9 @@ class PoseSession(QObject):
         self.editor = None
         self.camera = OrbitCamera()
         self.figure_id = self.rig = self.mesh = None
+        self.base_rig = self.base_mesh = None  # The figure as it ships, unshaped.
+        self.shape = BodyShape()
+        self.mesh_key = None  # Identifies the shaped mesh for the GPU cache.
         self.dragging = False  # A view is mid-drag: renders may be drafts.
         self.mode = "shaded"  # Display: shaded, lines, or both; shared by all views.
         self.lines = LineArtSettings()
@@ -31,14 +37,35 @@ class PoseSession(QObject):
         self.limits = True  # Joint limits; off lets a pose go anywhere.
         self.last_layer = None  # (document root id, node id) of the layer KSP made.
 
-    def set_figure(self, figure_id, rig, mesh, picker):
+    def set_figure(self, figure_id, rig, mesh):
+        """Take a figure as it ships; the session applies the body shape."""
+        self.figure_id, self.base_rig, self.base_mesh = figure_id, rig, mesh
+        self._build_figure()
+
+    def set_shape(self, shape):
+        """Reshape the figure. The pose, the camera, and the history are kept."""
+        shape = shape.validated()
+        if shape == self.shape:
+            return False
+        self.shape = shape
+        if self.base_rig is not None:
+            self._build_figure()
+        else:
+            self.changed.emit()
+        return True
+
+    def _build_figure(self):
+        """Shape the figure, then hand the result to the editor."""
         first = self.editor is None
+        rig, mesh = shaped_figure(self.base_rig, self.base_mesh, self.shape)
+        picker = FigurePicker(rig, mesh)
         if first:
             self.editor = PoseEditor(rig.skeleton, picker)
         else:
             self.editor.set_figure(rig.skeleton, picker)
         rig.skeleton.limits_enabled = self.limits
-        self.figure_id, self.rig, self.mesh = figure_id, rig, mesh
+        self.rig, self.mesh = rig, mesh
+        self.mesh_key = figure_key(self.figure_id, self.shape)
         if first:
             self.frame()
         self.changed.emit()
@@ -135,7 +162,7 @@ class PoseSession(QObject):
         return scene_io.write_scene(
             editor.skeleton, editor.pose, figure=self.figure_id or "", camera=self.camera,
             mode=self.mode, lines=self.lines, opacity=self.opacity,
-            layer_opacity=self.layer_opacity, output=self.output)
+            layer_opacity=self.layer_opacity, output=self.output, shape=self.shape)
 
     def load_pose_text(self, text):
         """Apply a stored pose as one undo step; returns what it did."""
@@ -149,6 +176,12 @@ class PoseSession(QObject):
         """Apply a stored scene, including the camera and every setting."""
         editor = self._require_figure()
         scene = scene_io.read_scene(text, editor.skeleton)
+        if scene.shape != self.shape and self.base_rig is not None:
+            # Shape first: it rebuilds the figure, and the pose goes on the new body.
+            self.shape = scene.shape.validated()
+            self._build_figure()
+            editor = self.editor
+            scene = scene_io.read_scene(text, editor.skeleton)
         editor.replace_pose(scene.pose)
         self.camera = scene.camera
         self.mode = scene.mode if scene.mode in MODES else "shaded"

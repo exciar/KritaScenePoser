@@ -6,11 +6,11 @@
 </head>
 <body>
   <h1>KSP — Krita Scene Poser</h1>
-  <p><strong>Version 0.0.6 — early development build.</strong> Pose the Body-chan or
-  Body-kun figure in the docker or directly on the canvas, save and reload poses, and
-  create a transparent line-art layer or shaded guide layer from the result. Body-shape
-  sliders and importing your own models are not implemented yet. Compatibility is
-  verified only on Krita 5.3.3 for Windows.</p>
+  <p><strong>Version 0.0.7 — early development build.</strong> Pose the Body-chan or
+  Body-kun figure in the docker or directly on the canvas, reshape its body, save and
+  reload poses, and create a transparent line-art layer or shaded guide layer from the
+  result. Importing your own models is not implemented yet. Compatibility is verified
+  only on Krita 5.3.3 for Windows.</p>
   <h2>Pose a figure</h2>
   <p>Choose a figure at the top of the docker; switching keeps the pose. Click a body part
   to select it; the hint line explains what dragging it does.</p>
@@ -32,6 +32,15 @@
     <li><strong>Figure opacity</strong> (Pose tab) fades the figure in the viewport, on
     the canvas, and in the guide layer.</li>
   </ul>
+  <h2>Body shape</h2>
+  <p>The <strong>Shape</strong> tab has fifteen sliders. Proportions: height, head size,
+  neck length, torso length, arm length, leg length, hand size, foot size, and shoulder
+  width. Build: chest, waist, hips, arm thickness, leg thickness, and overall build. Each
+  slider is a percentage of the figure's own size.</p>
+  <p>The body rebuilds about a quarter of a second after you stop dragging a slider. Your
+  pose, camera and undo history are kept, and the figure stays on the ground.
+  <strong>Reset Shape</strong> returns every slider to 100 %. A scene file stores the
+  shape. Shape is a property of the figure, so it is not part of the pose undo.</p>
   <h2>Poses and scenes</h2>
   <p>The <strong>Scene</strong> tab holds nine bundled poses: choose one and press
   <strong>Apply Pose</strong>, which is a single undo step. <strong>Save Pose…</strong>

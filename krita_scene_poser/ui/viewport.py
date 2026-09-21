@@ -93,7 +93,7 @@ class FigureViewport(QOpenGLWidget):
             width, height = max(1, round(self.width() * ratio)), max(1, round(self.height() * ratio))
             aspect = self.width() / max(1, self.height())
             if session.editor is not None and session.mesh is not None:
-                self.renderer.set_mesh(session.figure_id, session.mesh)
+                self.renderer.set_mesh(session.mesh_key, session.mesh)
                 shot = snapshot(session.editor.skeleton, session.editor.pose, session.camera,
                                 aspect, session.editor.selected, opacity=session.opacity)
             else:

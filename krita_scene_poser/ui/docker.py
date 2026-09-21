@@ -17,7 +17,7 @@ from .. import diagnostics, log
 from ..core.editor import DRAG, RINGS, display_name
 from ..core.lineart import LIMITS, LineArtSettings, line_uniforms
 from ..core.output import QUALITIES, OutputSettings, OutputSizeError
-from ..core.picking import FigurePicker
+from ..core.shape import CONTROLS as SHAPE_CONTROLS, LIMITS as SHAPE_LIMITS, BodyShape
 from ..integration import settings as ksp_settings
 from ..integration.krita_document import (
     GUIDE_LAYER_NAME, LINEART_LAYER_NAME, DocumentExportError, export_layer, layer_id,
@@ -42,6 +42,7 @@ TITLE = "KSP — Krita Scene Poser"
 EXPECTED_ERRORS = (CapabilityError, DocumentExportError, PixelTransferError,
                    MeshFormatError, RigFormatError, SceneFormatError, OutputSizeError)
 WORKSPACE_DELAY = 1500  # Milliseconds of quiet before the workspace is stored.
+SHAPE_DELAY = 200  # Milliseconds of quiet before a new body shape is built.
 NO_DOCUMENT = "Open or create a document to create a KSP layer."
 GUIDE_TOOLTIP = ("Render the posed, shaded figure from this view into a transparent paint "
                  "layer, at the size set below.")
@@ -94,6 +95,11 @@ class KSPDocker(DockWidget):
         self.session.lines = LineArtSettings.from_json(self.settings.lineart)
         self.session.output = OutputSettings.from_json(self.settings.output)
         self.session.limits = bool(self.settings.joint_limits)
+        self.shown_shape = None  # The shape the Shape tab last showed.
+        self.shape_timer = QTimer(self)
+        self.shape_timer.setSingleShot(True)
+        self.shape_timer.setInterval(SHAPE_DELAY)
+        self.shape_timer.timeout.connect(self._apply_shape)
         self.workspace_timer = QTimer(self)
         self.workspace_timer.setSingleShot(True)
         self.workspace_timer.setInterval(WORKSPACE_DELAY)
@@ -116,6 +122,7 @@ class KSPDocker(DockWidget):
         layout.addWidget(self.hint)
         tabs = QTabWidget()
         tabs.addTab(self._build_pose_tab(), "Pose")
+        tabs.addTab(self._build_shape_tab(), "Shape")
         tabs.addTab(self._build_lines_tab(), "Line Art")
         tabs.addTab(self._build_output_tab(), "Output")
         tabs.addTab(self._build_scene_tab(), "Scene")
@@ -220,6 +227,38 @@ class KSPDocker(DockWidget):
         slider.setToolTip(tip)
         slider.valueChanged.connect(slot)
         return slider
+
+    def _build_shape_tab(self):
+        """One slider per control, as a percentage of the figure's own size."""
+        form = QFormLayout()
+        self.shape_sliders, self.shape_values = {}, {}
+        for group, controls in SHAPE_CONTROLS:
+            heading = QLabel(group)
+            heading.setStyleSheet("font-weight: bold;")
+            form.addRow(heading)
+            for name, label in controls:
+                low, high = SHAPE_LIMITS[name]
+                slider = QSlider(Qt.Horizontal)
+                slider.setRange(int(round(low * 100)), int(round(high * 100)))
+                slider.setValue(100)
+                slider.setToolTip("{}: {} % to {} % of the figure's own size.".format(
+                    label, int(round(low * 100)), int(round(high * 100))))
+                slider.valueChanged.connect(self._shape_edited)
+                value = QLabel("100 %")
+                value.setMinimumWidth(48)
+                row = QHBoxLayout()
+                row.addWidget(slider, 1)
+                row.addWidget(value)
+                form.addRow(label, row)
+                self.shape_sliders[name] = slider
+                self.shape_values[name] = value
+        reset = QPushButton("Reset Shape")
+        reset.setToolTip("Put every control back to 100 %.")
+        reset.clicked.connect(self._reset_shape)
+        form.addRow(reset)
+        page = QWidget()
+        page.setLayout(form)
+        return page
 
     def _build_lines_tab(self):
         form = QFormLayout()
@@ -417,10 +456,9 @@ class KSPDocker(DockWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             if figure not in self.figures:
-                rig, mesh = load_figure(figure)
-                self.figures[figure] = (rig, mesh, FigurePicker(rig, mesh))
-            rig, mesh, picker = self.figures[figure]
-            self.session.set_figure(figure, rig, mesh, picker)
+                self.figures[figure] = load_figure(figure)
+            rig, mesh = self.figures[figure]
+            self.session.set_figure(figure, rig, mesh)
             self._show_status("{} ready.".format(rig.display_name))
             log.event("figure_loaded", figure=figure)
         except Exception as error:
@@ -499,6 +537,49 @@ class KSPDocker(DockWidget):
                 opacity=self.line_opacity.value() / 100.0,
                 **{name: box.isChecked() for name, box in self.line_toggles.items()})
             self._apply_lines(settings)
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _shape_edited(self, *unused):
+        """Show the new numbers at once; build the body when the slider settles."""
+        if self.updating:
+            return
+        try:
+            for name, slider in self.shape_sliders.items():
+                self.shape_values[name].setText("{} %".format(slider.value()))
+            self.shape_timer.start()
+        except Exception as error:
+            self._show_status(describe(error))
+
+    def _apply_shape(self):
+        if self.session.editor is None:
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        started = time.perf_counter()
+        try:
+            shape = BodyShape(**{name: slider.value() / 100.0
+                                 for name, slider in self.shape_sliders.items()})
+            if self.session.set_shape(shape):
+                self.shown_shape = self.session.shape
+                seconds = time.perf_counter() - started
+                self._show_status("Body shape updated in {:.0f} ms.".format(seconds * 1000))
+                log.event("shape_applied", seconds=round(seconds, 3),
+                          default=shape.is_default())
+        except Exception as error:
+            self._show_status("The body shape could not be applied. " + describe(error))
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _reset_shape(self, *unused):
+        try:
+            self.updating = True
+            try:
+                for name, slider in self.shape_sliders.items():
+                    slider.setValue(100)
+                    self.shape_values[name].setText("100 %")
+            finally:
+                self.updating = False
+            self._apply_shape()
         except Exception as error:
             self._show_status(describe(error))
 
@@ -642,6 +723,7 @@ class KSPDocker(DockWidget):
                 button.setChecked(view == session.mode)
             self._sync_line_widgets(session.lines)
             self._sync_output_widgets(session)
+            self._sync_shape_widgets(session.shape)
             if selected is not None:
                 hint = editor.hint(selected)
                 if editor.skeleton.at_limit(editor.pose, selected):
@@ -669,6 +751,19 @@ class KSPDocker(DockWidget):
             self.color_button.setStyleSheet(
                 "background-color: {0}; color: {1};".format(
                     lines.color, "#ffffff" if QColor(lines.color).lightness() < 128 else "#000000"))
+        finally:
+            self.updating = False
+
+    def _sync_shape_widgets(self, shape):
+        if shape == self.shown_shape or self.shape_timer.isActive():
+            return  # Mid-edit, or already shown; do not fight the user's slider.
+        self.shown_shape = shape
+        self.updating = True
+        try:
+            for name, slider in self.shape_sliders.items():
+                percent = int(round(getattr(shape, name) * 100))
+                slider.setValue(percent)
+                self.shape_values[name].setText("{} %".format(percent))
         finally:
             self.updating = False
 
@@ -740,7 +835,7 @@ class KSPDocker(DockWidget):
             shot = snapshot(session.editor.skeleton, session.editor.pose, session.camera,
                             plan.aspect, None, grid=False, opacity=session.opacity)
             image = self.offscreen.render(
-                session.figure_id, session.mesh, shot, plan.render_width, plan.render_height,
+                session.mesh_key, session.mesh, shot, plan.render_width, plan.render_height,
                 mode, line_uniforms(session.lines, plan.supersample), keep_buffers=False,
                 scale_to=(plan.width, plan.height))
             pixels = qimage_to_bgra(image)

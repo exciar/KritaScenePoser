@@ -1,6 +1,6 @@
 # KSP — Krita Scene Poser
 
-KSP is an embedded posing studio for Krita. This is an early development build, version `0.0.6`. Pose Body-chan or Body-kun in the docker, or right on the canvas with **Pose on Canvas** (CSP-style). Drag body parts or rotate joints with rings, start from a bundled pose, and save your own. Joints stop where a body's would. Then add the figure to your document as a transparent **line art** layer or a shaded guide layer, at the size and opacity you choose. Body-shape sliders and importing your own models are still to come; [docs/custom-figures.md](docs/custom-figures.md) explains how to prepare a model for the importer.
+KSP is an embedded posing studio for Krita. This is an early development build, version `0.0.7`. Pose Body-chan or Body-kun in the docker, or right on the canvas with **Pose on Canvas** (CSP-style). Drag body parts or rotate joints with rings, start from a bundled pose, and save your own. Joints stop where a body's would, and fifteen sliders reshape the body itself. Then add the figure to your document as a transparent **line art** layer or a shaded guide layer, at the size and opacity you choose. Importing your own models is still to come; [docs/custom-figures.md](docs/custom-figures.md) explains how to prepare a model for the importer.
 
 The plugin runs with Krita's bundled Python, PyQt5, and the Python standard library. It does not install packages, contact a server, or run Blender or other external tools. A separate Python installation is only useful for development tests and packaging.
 
@@ -8,7 +8,7 @@ The plugin runs with Krita's bundled Python, PyQt5, and the Python standard libr
 
 ## Install and enable
 
-1. Build the ZIP below, or use the supplied `dist/ksp-0.0.6.zip`. Earlier builds stay in `dist/` for comparison; install only one at a time.
+1. Build the ZIP below, or use the supplied `dist/ksp-0.0.7.zip`. Earlier builds stay in `dist/` for comparison; install only one at a time.
 2. In Krita choose **Tools → Scripts → Import Python Plugin…** and select the ZIP. Restart Krita.
 3. Open **Settings → Configure Krita → Python Plugin Manager**, enable **KSP — Krita Scene Poser**, and restart Krita again.
 4. Open **Settings → Dockers → KSP — Krita Scene Poser**.
@@ -52,6 +52,22 @@ The docker's tabs hold the rest: **Pose** (canvas switches and edit buttons), **
   - Brushes are paused until you turn Pose on Canvas off. The figure stays visible for drawing over.
 
 The docker viewport and the canvas show the same pose; a change in one updates the other. Canvas posing relies on Krita's internal canvas widget, which is not part of Krita's documented plugin API. If a Krita update changes it, canvas posing turns itself off and explains why, and the docker keeps working. **Copy Diagnostics** includes a `[canvas]` section for reporting problems.
+
+## Body shape
+
+The **Shape** tab reshapes the figure with fifteen sliders, each a percentage of the figure's own size.
+
+**Proportions:** height, head size, neck length, torso length, arm length, leg length, hand size, foot size, and shoulder width. Use head size and height together for the classic head-count proportions — a 7-head or an 8-head figure.
+
+**Build:** chest, waist, hips, arm thickness, leg thickness, and an overall build slider that thickens everything at once.
+
+- The numbers update as you drag; the body rebuilds about a quarter of a second after you stop.
+- Your pose, camera and history all survive a shape change.
+- The figure always stays standing on the ground, whatever you do to its legs.
+- **Reset Shape** puts every slider back to 100 %.
+- A scene file remembers the body it was made on.
+
+Shape is a property of the figure, not a pose change, so it is not in the pose undo history.
 
 ## Poses, presets, and scenes
 
@@ -157,6 +173,7 @@ These commands require no third-party packages. Tests cover:
 - the figure shaders' dialects and bone packing (checked against CPU skinning), plus the figure assets and file formats;
 - line art: settings validation and storage, line-width scaling, depth ranges and packing, and shader sanity (reserved words, matching varyings, uniform budget);
 - joint limits: swing-twist clamping, hinge direction derived from each rig's rest pose, elbows and knees folding the right way on both figures, and a mirrored pose staying legal;
+- body shape: clamping and storage, which control reaches which joint, a longer arm measuring longer, a wider waist widening only the waist, the figure staying grounded, unit normals, and identity skinning at rest;
 - pose and scene files: round trips, portability between figures, rejection of damaged files, and the bundled presets;
 - output sizes, anchors, quality limits, layer opacity, and rewriting a KSP layer without touching anyone else's;
 - pixel transfer and the premultiplied readback contract;
@@ -168,7 +185,7 @@ These commands require no third-party packages. Tests cover:
 
 They run outside Krita. Actual Krita/OpenGL acceptance is separate. `tools/krita_host_probe.py` runs the renderer and a real paint-layer export inside Krita without the GUI; the compatibility notes explains how to launch it. The packager uses an explicit runtime allowlist, sorted entries, fixed timestamps and permissions, and a bundled copy of `LICENSE`. Rebuilding unchanged inputs with the same Python/zlib toolchain produces the same ZIP bytes. Development files, tests, caches, and logs do not ship.
 
-The renderer and export assumptions are recorded in the design notes. GL functions are resolved through `ctypes` so ANGLE works; see the design notes. Rendering and layer export are verified in the Krita 5.3.3 GUI on Windows. The docker lifecycle checks are the one open Phase 0 item. Both figures, Body-chan and Body-kun, are compiled into versioned rig and mesh files by a pure-Python `.blend` reader (see the design notes and `docs/images/figures-preview.png`). Viewport rendering, picking, and posing are described in the design notes, canvas posing in the design notes, line art in the design notes, the planned figure importer in the design notes, and joint limits, pose files, opacity and output control in the design notes. Next: body-shape sliders (0.0.7), then the figure importer (0.0.8). The overall roadmap is in the plan.
+The renderer and export assumptions are recorded in the design notes. GL functions are resolved through `ctypes` so ANGLE works; see the design notes. Rendering and layer export are verified in the Krita 5.3.3 GUI on Windows. The docker lifecycle checks are the one open Phase 0 item. Both figures, Body-chan and Body-kun, are compiled into versioned rig and mesh files by a pure-Python `.blend` reader (see the design notes and `docs/images/figures-preview.png`). Viewport rendering, picking, and posing are described in the design notes, canvas posing in the design notes, line art in the design notes, the planned figure importer in the design notes, joint limits, pose files, opacity and output control in the design notes, and body shape in the design notes. Next: the figure importer (0.0.8). The overall roadmap is in the plan.
 
 ## Update, disable, or uninstall
 

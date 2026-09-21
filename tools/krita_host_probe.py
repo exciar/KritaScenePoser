@@ -432,6 +432,57 @@ def main(args=None):
         return {"checks": checks, "torso_alpha": [solid[torso + 3], half[torso + 3]],
                 "torso_color": list(solid[torso:torso + 3])}
 
+    def render_shape():
+        # A reshaped figure must load, render, and stay on the ground.
+        from krita_scene_poser.core.camera import OrbitCamera
+        from krita_scene_poser.core.shape import BodyShape
+        from krita_scene_poser.render.shaders import snapshot
+        from krita_scene_poser.storage.figures import load_figure
+        from krita_scene_poser.storage.shaping import figure_key, shaped_figure
+        renderer = state["figure_renderer"]
+        rig, mesh = load_figure("body_kun")
+        width, height = 240, 360
+        shapes = {
+            "default": BodyShape(),
+            "tall": BodyShape(height=1.3),
+            "heavy": BodyShape(build=1.35, waist=1.5, chest=1.3, hips=1.4),
+            "long_legs": BodyShape(leg_length=1.3),
+        }
+        results, coverage = {}, {}
+        for name, shape in shapes.items():
+            start = time.perf_counter()
+            shaped_rig, shaped_mesh = shaped_figure(rig, mesh, shape)
+            build_seconds = time.perf_counter() - start
+            skeleton = shaped_rig.skeleton
+            camera = OrbitCamera(pitch=0.0)
+            camera.frame([j.position for j in shaped_rig.joints]
+                         + [j.tail for j in shaped_rig.joints])
+            renderer.set_mesh(figure_key("body_kun", shape), shaped_mesh)
+            shot = snapshot(skeleton, skeleton.rest_pose(), camera, width / height, grid=False)
+            pixels = qimage_to_bgra(renderer.render_image(shot, width, height))
+            covered = sum(1 for a in pixels[3::4] if a)
+            coverage[name] = covered
+            results[name] = {
+                "build_s": round(build_seconds, 3),
+                "height_m": round(max(shaped_mesh.positions[1::3]), 3),
+                "lowest_m": round(min(shaped_mesh.positions[1::3]), 4),
+                "coverage_px": covered,
+            }
+        checks = {
+            "all_shapes_render": all(value > 1000 for value in coverage.values()),
+            "tall_is_taller": results["tall"]["height_m"] > results["default"]["height_m"] * 1.2,
+            "heavy_covers_more": coverage["heavy"] > coverage["default"],
+            "long_legs_is_taller": results["long_legs"]["height_m"] > results["default"]["height_m"],
+            "always_on_the_ground": all(abs(value["lowest_m"]) < 0.001
+                                        for value in results.values()),
+        }
+        failed = [name for name, ok in checks.items() if not ok]
+        if failed:
+            raise RuntimeError("Body shape checks failed: {}; {}".format(
+                ", ".join(failed), results))
+        renderer.set_mesh("body_kun", mesh)  # Leave the cache on the plain figure.
+        return {"checks": checks, "shapes": results}
+
     def apply_presets():
         # Every bundled pose loads in Krita's own Python, on both figures.
         from krita_scene_poser.storage.figures import load_figure
@@ -605,6 +656,7 @@ def main(args=None):
         if _run(report, "render_figure", render_figure) is not None:
             _run(report, "render_lineart", render_lineart)
             _run(report, "render_opacity", render_opacity)
+            _run(report, "render_shape", render_shape)
     _run(report, "offscreen_renderer", offscreen_renderer)
     state["documents"] = []
     for profile in EXPORT_PROFILES:

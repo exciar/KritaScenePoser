@@ -7,6 +7,7 @@ from krita_scene_poser.core.camera import OrbitCamera
 from krita_scene_poser.core.lineart import LineArtSettings
 from krita_scene_poser.core.math3d import Quat, Vec3, X_AXIS, Y_AXIS, Z_AXIS
 from krita_scene_poser.core.output import OutputSettings
+from krita_scene_poser.core.shape import BodyShape
 from krita_scene_poser.storage.figures import load_figure
 from krita_scene_poser.storage.scene_io import (
     SceneFormatError, read_pose, read_scene, write_pose, write_scene,
@@ -124,10 +125,12 @@ class SceneFileTests(unittest.TestCase):
         lines = LineArtSettings(color="#204080", outline_width=4.0, seams=False, opacity=0.6)
         output = OutputSettings(mode="custom", width=800, height=1200, anchor="topleft",
                                 supersample=2)
+        shape = BodyShape(height=1.15, waist=1.3, arm_length=0.9)
         text = write_scene(self.skeleton, posed(self.skeleton), figure="body_kun",
                            camera=camera, mode="both", lines=lines, opacity=0.5,
-                           layer_opacity=0.75, output=output)
+                           layer_opacity=0.75, output=output, shape=shape)
         scene = read_scene(text, self.skeleton)
+        self.assertEqual(scene.shape, shape)
         self.assertEqual(scene.figure, "body_kun")
         self.assertEqual(scene.mode, "both")
         self.assertEqual(scene.lines, lines)
@@ -143,13 +146,15 @@ class SceneFileTests(unittest.TestCase):
     def test_defaults_fill_in_for_a_sparse_or_damaged_scene(self):
         text = write_scene(self.skeleton, self.skeleton.rest_pose())
         data = json.loads(text)
-        for key in ("camera", "lines", "output", "display", "opacity", "layer_opacity"):
+        for key in ("camera", "lines", "output", "display", "opacity", "layer_opacity",
+                    "shape"):
             data.pop(key)
         scene = read_scene(json.dumps(data), self.skeleton)
         self.assertEqual(scene.mode, "shaded")
         self.assertEqual(scene.lines, LineArtSettings())
         self.assertEqual(scene.output, OutputSettings())
         self.assertEqual((scene.opacity, scene.layer_opacity), (1.0, 1.0))
+        self.assertTrue(scene.shape.is_default())  # A 0.0.6 scene has no shape.
         self.assertAlmostEqual(scene.camera.distance, OrbitCamera().distance)
 
         damaged = json.loads(text)
