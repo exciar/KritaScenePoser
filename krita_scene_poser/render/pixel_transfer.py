@@ -1,11 +1,8 @@
-"""Explicit, bounded conversion to Krita's RGBA/U8 byte layout.
+"""Conversion from rendered images to Krita's top-down BGRA, straight-alpha layout.
 
-Krita's integer RGBA paint devices use top-down BGRA, with straight alpha.
-QImage.Format_RGBA8888 is byte ordered, independent of host endianness, and
-Qt converts premultiplied input to straight alpha when selecting that format.
-Framebuffer readback is labelled premultiplied by Qt, so the renderer must
-write premultiplied pixels for that conversion to be correct.
-This module deliberately imports Qt only when a QImage is being converted.
+Qt converts premultiplied readback to straight alpha when asked for RGBA8888, which
+is why the renderer must write premultiplied pixels. Qt is imported only when a
+QImage is converted.
 """
 
 MAX_DIMENSION = 4096
@@ -128,5 +125,4 @@ def validate_probe_pixels(bgra_bytes, width, height):
 
 
 def validate_probe(image):
-    """Return measured probe samples, or fail before any document modification."""
     return validate_probe_pixels(qimage_to_bgra(image), image.width(), image.height())

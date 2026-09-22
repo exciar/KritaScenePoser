@@ -1,20 +1,7 @@
-"""Joint rotation limits (pure Python).
+"""Joint limits: a twist range about the bone and swing ranges about local X and Z.
 
-A limit is expressed in the joint's own rest frame, where +Y runs along the
-bone: a *twist* range about that bone axis, and a *swing* range
-about the local X and Z axes. Swing is measured as the axis-angle vector of
-the rotation that tilts the bone, split into its X and Z parts, so each part
-can have its own range. That allows both symmetric cones (a shoulder) and
-one-way hinges (an elbow).
-
-Rigs disagree about which way a bone's local X points, so hinge directions
-are **derived from the rest pose** rather than assumed: a rigged elbow or
-knee is never perfectly straight, and the small rest bend gives both the
-hinge axis and the direction that bends it further. Everything else uses
-symmetric cones, which do not depend on the rig's axis conventions.
-
-Limits are looked up by joint name, so any figure using KSP's joint layout
-gets them, including figures imported later.
+Hinge directions are measured from the rest pose, because rigs disagree
+about which way a bone's local X points.
 """
 
 import math
@@ -43,7 +30,6 @@ class JointLimit:
             self.swing_x, self.swing_z, self.twist)
 
     def flipped(self):
-        """The same limit for a bone whose local X points the other way."""
         return JointLimit((-self.swing_x[1], -self.swing_x[0]), self.swing_z, self.twist)
 
 
@@ -56,7 +42,6 @@ def _range(pair):
 
 
 def cone(swing, twist):
-    """A symmetric limit: ``swing`` degrees off the bone axis, ``twist`` about it."""
     return JointLimit((-swing, swing), (-swing, swing), (-twist, twist))
 
 
@@ -120,7 +105,6 @@ def limit_name(joint_name):
 
 
 def default_limit(joint_name):
-    """The limit for a joint name, or ``None`` when it is unlimited."""
     return DEFAULT_LIMITS.get(limit_name(joint_name))
 
 
@@ -195,7 +179,6 @@ def clamp_rotation(limit, rotation):
 
 
 def is_limited(limit, rotation, tolerance=1e-6):
-    """True when ``limit`` would change ``rotation``: the joint is at a stop."""
     if limit is None:
         return False
     return not clamp_rotation(limit, rotation).is_close(rotation.normalized(), tolerance)

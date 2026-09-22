@@ -1,8 +1,5 @@
-"""KSP preferences, stored through Krita's public settings API.
-
-Values live in Krita's configuration under the ``krita_scene_poser`` group as
-strings. Unreadable or invalid values fall back to their defaults, so a
-damaged setting can never break plugin startup.
+"""Preferences in Krita's settings store. Unreadable values fall back to defaults, so a
+bad setting cannot stop the plugin loading.
 """
 
 from dataclasses import dataclass, fields, replace
@@ -69,18 +66,15 @@ def update(settings, write=None, **changes):
 
 
 def data_directory(*parts):
-    """A folder inside KSP's own directory in Krita's application-data folder."""
     from krita import Krita
     return os.path.join(Krita.getAppDataLocation(), GROUP, *parts)
 
 
 def log_directory():
-    """KSP's diagnostic-log folder inside Krita's application-data folder."""
     return data_directory("logs")
 
 
 def poses_directory():
-    """Where the file dialogs start, created on demand."""
     directory = data_directory("poses")
     try:
         os.makedirs(directory, exist_ok=True)

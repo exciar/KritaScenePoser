@@ -1,12 +1,6 @@
-"""Read a glTF 2.0 binary file (``.glb``, and ``.vrm``) into a source figure.
+"""Read a skinned figure from glTF 2.0 binary (.glb and .vrm).
 
-Only what a posable figure needs is read: the node hierarchy, one skin, and
-the skinned meshes. Materials, textures, animations, cameras, and lights are
-skipped. A VRM file is a ``.glb`` with a humanoid bone table, which is used
-when it is there because it names bones better than any guess.
-
-The file is untrusted, so every offset and index is checked against the data
-actually present before it is used.
+The file is untrusted, so every offset is checked against the data before it is read.
 """
 
 import json
@@ -332,7 +326,6 @@ def _indices(document, buffers, primitive, count):
 
 
 def _weights(document, buffers, attributes, order, count):
-    """Per-vertex ``{bone name: weight}``, from every JOINTS_n/WEIGHTS_n pair."""
     result = [dict() for _ in range(count)]
     for set_number in range(8):
         joint_key = "JOINTS_{}".format(set_number)

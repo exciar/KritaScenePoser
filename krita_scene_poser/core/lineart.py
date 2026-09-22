@@ -1,15 +1,4 @@
-"""Line-art settings and helpers (pure Python).
-
-Lines come from image-space edges in G-buffers. Four line types
-can each be switched on or off:
-- **outline:** the figure's silhouette against empty space;
-- **contours:** depth jumps inside the figure, such as an arm in front of the body;
-- **creases:** sharp folds, where the surface normal turns more than the crease angle;
-- **seams:** boundaries between the mannequin's parts (its segment lines).
-
-Widths are in output pixels: document pixels for layers, display pixels in
-the docker viewport.
-"""
+"""Line-art settings and the shader uniforms derived from them."""
 
 from dataclasses import asdict, dataclass, fields, replace
 import json

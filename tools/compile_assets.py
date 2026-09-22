@@ -45,7 +45,6 @@ TO_KSP = Quat.from_axis_angle(X_AXIS, -math.pi / 2)
 
 
 def joint_map():
-    """KSP joints: (name, parent, source deform bones merged into it), parents first."""
     joints = [("hips", None, ["DEF-spine", "DEF-pelvis.L", "DEF-pelvis.R"]),
               ("waist", "hips", ["DEF-spine.001"]),
               ("torso", "waist", ["DEF-spine.002"]),

@@ -1,13 +1,7 @@
-"""Small indexed GPU probe using Krita's bundled PyQt5 and stdlib ctypes.
+"""Indexed-triangle renderer used by Self-Test.
 
-All GL resources belong to one current context. Works with desktop OpenGL and
-with OpenGL ES (ANGLE, Krita's Windows default). There is no software
-substitute: unsupported drivers produce an actionable failure.
-
-Color contract: shaders emit premultiplied alpha and blend with
-(ONE, ONE_MINUS_SRC_ALPHA). Qt's framebuffer readback labels RGBA8 pixels as
-premultiplied, so any straight-alpha output would be corrupted when converted
-to straight RGBA.
+Shaders emit premultiplied alpha: Qt labels framebuffer readback as premultiplied,
+so straight alpha would be corrupted on conversion.
 """
 import struct
 

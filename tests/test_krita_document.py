@@ -211,7 +211,6 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.document.created, [])
 
     def test_a_render_may_be_a_different_size_than_the_document(self):
-        """Custom output sizes: the layer keeps pixels outside the canvas."""
         pixels = bytes(41 * 20 * 4)
         node = self.export(pixels, 41, 20, origin=(-3, 7))
         self.assertEqual(node.pixels, (pixels, -3, 7, 41, 20))

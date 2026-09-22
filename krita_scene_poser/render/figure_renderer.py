@@ -1,12 +1,7 @@
-"""Skinned figure rendering on the GPU: shaded view, grid, and line art.
+"""GPU rendering of the skinned figure, the grid and the line art.
 
-The renderer receives immutable ``RenderSnapshot`` values and never owns pose
-state. Skinning runs in the vertex shader: each joint's matrix arrives as
-three ``vec4`` rows of an affine transform. Line art renders two
-G-buffers, normals with part ids and packed depth, then finds edges in a
-full-screen pass. Output keeps the premultiplied-alpha contract of
-``gl_renderer``: every pass writes premultiplied pixels, so a figure below
-full opacity, the grid, and the lines all blend correctly.
+Every pass writes premultiplied alpha, so a faded figure, the grid and
+the lines all blend correctly.
 """
 
 from array import array

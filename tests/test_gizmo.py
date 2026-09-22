@@ -11,7 +11,6 @@ from krita_scene_poser.core.math3d import IDENTITY, Quat, Vec3, X_AXIS, Y_AXIS, 
 
 
 def front(point):
-    """Orthographic front view: 100 px per meter, screen y down."""
     return (point.x * 100.0, -point.y * 100.0)
 
 

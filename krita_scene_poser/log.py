@@ -1,10 +1,6 @@
-"""Structured diagnostic log; disabled by default.
+"""Optional JSON-lines diagnostic log, off by default.
 
-When enabled, events are appended as JSON lines to a small rotating file that
-the caller places in Krita's application-data folder. Nothing is sent
-anywhere. Events carry no file paths, document names, or pixel data, and
-exceptions are recorded as type and message only, because tracebacks contain
-local paths.
+Exceptions are logged as type and message only: tracebacks contain local paths.
 """
 
 import json

@@ -1,9 +1,4 @@
-"""Rotation-ring geometry and ring picking (pure Python).
-
-Rings are circles around a joint's pivot, one per local axis. The UI projects
-their world points to the screen; these helpers pick the ring under the
-cursor and turn cursor motion into an angle about the ring's axis.
-"""
+"""Rotation-ring geometry and ring picking."""
 
 import math
 
@@ -14,7 +9,6 @@ EDGE_ON = 0.2  # |axis . view| below this measures the drag along the screen tan
 
 
 def joint_axes(rotation):
-    """World directions of a joint's local X, Y (along the bone), and Z axes."""
     return tuple(rotation.rotate(axis) for axis in (X_AXIS, Y_AXIS, Z_AXIS))
 
 
@@ -53,7 +47,6 @@ def distance_to_ring(cursor, projected):
 
 
 def pick_ring(cursor, projected_rings, tolerance):
-    """Index of the nearest ring within ``tolerance`` pixels and its parameter."""
     best = None
     for index, projected in enumerate(projected_rings):
         distance, where = distance_to_ring(cursor, projected)
@@ -63,7 +56,6 @@ def pick_ring(cursor, projected_rings, tolerance):
 
 
 def signed_angle(v0, v1, axis):
-    """Angle from v0 to v1 about ``axis`` (right-hand rule), in (-pi, pi]."""
     return math.atan2(axis.dot(v0.cross(v1)), v0.dot(v1))
 
 

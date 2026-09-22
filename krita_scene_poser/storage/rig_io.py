@@ -50,7 +50,6 @@ class RigData:
 
 
 def build_skeleton(joints):
-    """Skeleton whose rest pose reproduces the given world rest transforms."""
     index, world, result = {}, {}, []
     for joint in joints:
         if joint.parent is None:

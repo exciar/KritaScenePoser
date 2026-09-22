@@ -1,9 +1,4 @@
-"""Saving and loading pose and scene files from the docker.
-
-Every call returns a message for the status line and never raises, because a
-cancelled dialog, a read-only folder, or a file from a newer KSP are all
-ordinary outcomes rather than faults.
-"""
+"""Pose and scene file dialogs. Each call returns a status message and never raises."""
 
 import os
 
@@ -78,7 +73,6 @@ def load_scene(parent, session):
 
 
 def apply_preset(session, preset):
-    """Apply a bundled preset, which is one undo step like any pose file."""
     applied = session.load_pose_text(ksp_presets.preset_text(preset))
     return applied.describe(_figure_name(session))
 

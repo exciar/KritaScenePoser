@@ -1,6 +1,6 @@
-# KSP — Krita Scene Poser: feature list
+# KSP feature list
 
-Version 0.0.8.
+Version 0.0.9.
 
 ## Figures
 
@@ -63,7 +63,7 @@ Version 0.0.8.
 - Size, vertex, triangle, part and bone caps
 - Plain-language messages for compressed, split, or unsupported files
 
-## Posing — drag mode
+## Posing: drag mode
 
 - Click to select a body part
 - Limb drag
@@ -76,7 +76,7 @@ Version 0.0.8.
 - Whole-figure turn (Shift + hips drag)
 - Hint line for the selected joint
 
-## Posing — rings mode
+## Posing: rings mode
 
 - Mode switch (T)
 - Two bend rings

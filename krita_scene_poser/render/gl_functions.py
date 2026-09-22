@@ -1,13 +1,7 @@
-"""Minimal OpenGL entry points through Qt's resolver and stdlib ctypes.
+"""OpenGL entry points resolved with ctypes, so ANGLE works.
 
-Krita on Windows defaults to ANGLE (OpenGL ES), for which its bundled PyQt5
-has no function wrapper. Resolving a fixed set of entry points with
-``QOpenGLContext.getProcAddress`` works for ANGLE and desktop OpenGL alike.
-
-A wrong ctypes prototype crashes the host instead of raising. Every entry point
-is declared once below from the OpenGL ES 2.0 / OpenGL 2.0 C prototypes; add
-one only with the same review, and only call them while the owning context is
-current.
+A wrong prototype crashes Krita instead of raising. Check each entry against the GL ES
+2.0 headers, and call them only while their context is current.
 """
 
 import ctypes
@@ -78,7 +72,6 @@ class GLFunctions:
     """Callable entry points for one context; discard when it is destroyed."""
 
     def __init__(self, resolve):
-        """``resolve(name)`` returns an entry point address, or 0 if absent."""
         missing = []
         for name, (restype, argtypes) in PROTOTYPES.items():
             address = resolve(name)
@@ -100,7 +93,6 @@ class GLFunctions:
         return value.decode("utf-8", "replace") if value else "unavailable"
 
     def uniform_vec4_array(self, location, values):
-        """Upload ``len(values) / 4`` vec4s from a flat float sequence."""
         data = (GLfloat * len(values))(*values)
         self.glUniform4fv(location, len(values) // 4, data)
 
@@ -109,7 +101,6 @@ class GLFunctions:
 
 
 def resolve_from_context(context):
-    """Bind the entry points of a current QOpenGLContext."""
     def resolve(name):
         pointer = context.getProcAddress(name.encode("ascii"))
         return int(pointer) if pointer is not None else 0

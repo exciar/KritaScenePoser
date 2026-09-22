@@ -1,13 +1,7 @@
-"""Output size and quality for created layers (pure Python).
+"""Output size and quality for created layers.
 
-A layer is normally the document's size, but it can also be a size the user
-picks, anchored in the document. Either way the figure may be rendered larger
-and scaled down, which smooths edges and hairlines that a single sample
-leaves ragged.
-
-Sizes are in document pixels, and the same caps as the pixel transfer apply to
-the *rendered* image, so a supersampled render is refused before anything is
-allocated rather than failing on the GPU.
+The size caps apply to the rendered image, so an oversized supersample is refused
+before anything is allocated.
 """
 
 from dataclasses import asdict, dataclass, fields, replace

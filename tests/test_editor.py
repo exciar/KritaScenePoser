@@ -15,7 +15,6 @@ VIEW = Vec3(0.0, 0.0, -1.0)  # Looking at the figure's front.
 
 
 def ray_to(point):
-    """A view ray that crosses the view-parallel plane at ``point``."""
     return Ray(point - VIEW * 5.0, VIEW)
 
 
@@ -260,7 +259,6 @@ class LimitedEditorTests(EditorTests):
         self.assertGreater(self.elbow_bend(), 60.0)
 
     def test_a_pose_never_holds_a_forbidden_rotation(self):
-        """Whatever the gesture, what lands in the pose is inside the limits."""
         for name in ("forearm.L", "shin.R", "head", "hand.L"):
             with self.subTest(joint=name):
                 index = self.joint(name)

@@ -1,8 +1,5 @@
-"""KSP menu actions under Tools > Scripts.
-
-The actions ship without default shortcuts so they never clash with Krita's.
-Users can assign keys in Settings > Configure Krita > Keyboard Shortcuts
-(search for "KSP").
+"""Menu actions under Tools > Scripts. None has a default shortcut, so none clashes
+with Krita's own.
 """
 
 import os

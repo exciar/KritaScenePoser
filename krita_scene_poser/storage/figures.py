@@ -1,9 +1,6 @@
-"""Figure discovery and loading, bundled and imported.
+"""Figure discovery and loading from the bundled folder and any extra folders.
 
-A figure is a ``<id>.rig.json`` plus ``<id>.mesh`` pair. KSP looks in the
-folder it ships with, and in any folder the caller adds - which is how
-imported figures join the list. Damaged or unreadable figures are
-reported and skipped, so one bad file never stops KSP from starting.
+Damaged figures are reported and skipped, so one bad file never stops KSP starting.
 """
 
 import os

@@ -37,7 +37,6 @@ class PresetTests(unittest.TestCase):
                     self.assertEqual(len(applied.pose.rotations), len(rig.skeleton.joints))
 
     def test_presets_stay_inside_the_joint_limits(self):
-        """They are authored through the same clamp the docker uses."""
         skeleton = self.rigs["body_kun"].skeleton
         for preset, _ in self.presets:
             pose = load_preset(preset, skeleton).pose

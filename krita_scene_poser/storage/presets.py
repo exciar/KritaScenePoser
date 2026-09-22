@@ -1,9 +1,4 @@
-"""Bundled pose presets: discovery and loading (pure Python).
-
-A preset is a ``ksp-pose`` file in ``assets/poses`` whose name doubles as its
-id. Presets are keyed by joint name, so they apply to any KSP figure. A
-damaged preset is reported and skipped rather than stopping the list.
-"""
+"""Bundled pose presets in assets/poses."""
 
 import json
 import os
@@ -48,7 +43,6 @@ def available_presets(folder=None):
 
 
 def preset_text(preset, folder=None):
-    """The stored text of one preset."""
     folder = folder or default_folder()
     with open(os.path.join(folder, preset + SUFFIX), encoding="utf-8") as handle:
         return handle.read()

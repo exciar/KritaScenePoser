@@ -1,10 +1,4 @@
-"""Build a reshaped figure from a rig, a mesh, and a body shape.
-
-The maths is in ``core.shape``; this module turns its results back into the
-ordinary ``RigData`` and ``MeshData`` that the rest of KSP already uses. A
-reshaped figure is therefore an ordinary figure: it poses, picks, exports, and
-draws line art with no special cases anywhere else.
-"""
+"""Build a reshaped figure as ordinary RigData and MeshData (see core.shape)."""
 
 from array import array
 
@@ -48,7 +42,6 @@ def shaped_figure(rig, mesh, shape):
 
 
 def figure_key(figure_id, shape):
-    """A GPU cache key: a reshaped figure is a different mesh to upload."""
     shape = (shape or BodyShape()).validated()
     return figure_id if shape.is_default() else "{}#{}".format(figure_id, shape.to_json())
 

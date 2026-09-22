@@ -1,8 +1,7 @@
-"""Joint hierarchy: forward kinematics, IK application, and mirroring.
+"""Joint hierarchy: forward kinematics, IK and mirroring.
 
-A ``Skeleton`` is the immutable rest rig; a ``Pose`` is the authored state
-(per-joint local rotations on top of the rest pose, plus the root transform).
-Joints are ordered so that every parent precedes its children.
+A Skeleton is the rest rig and a Pose holds local rotations on top of it. Parents
+always come before their children.
 """
 
 from dataclasses import dataclass, replace
@@ -52,12 +51,10 @@ def mirror_name(name):
 
 
 def mirror_vector(v):
-    """Reflect across the YZ plane (x -> -x)."""
     return Vec3(-v.x, v.y, v.z)
 
 
 def mirror_rotation(q):
-    """The rotation seen in a mirror across the YZ plane."""
     return Quat(q.w, q.x, -q.y, -q.z)
 
 
@@ -125,12 +122,10 @@ class Skeleton:
                      for t in self.transforms(pose))
 
     def skinning_matrices(self, pose):
-        """Per-joint bind-space to posed-world matrices, for GPU skinning."""
         return tuple(world @ bind for world, bind in
                      zip(self.world_matrices(pose), self.inverse_bind))
 
     def limit_for(self, index):
-        """The joint's limit, or ``None`` when limits are off or it has none."""
         return self.limits[index] if self.limits_enabled else None
 
     def set_rotation(self, pose, index, local):
@@ -142,18 +137,15 @@ class Skeleton:
         return pose.with_rotation(index, clamp_rotation(self.limit_for(index), local))
 
     def at_limit(self, pose, index):
-        """True when the joint is resting against one of its stops."""
         return at_boundary(self.limit_for(index), pose.rotations[index])
 
     def local_rotation_for(self, pose, index, world_rotation, transforms=None):
-        """Pose rotation that gives joint ``index`` the requested world rotation."""
         transforms = transforms or self.transforms(pose)
         parent_rotation = self._parent_rotation(pose, transforms, index)
         return (self.joints[index].rotation.inverse() * parent_rotation.inverse()
                 * world_rotation).normalized()
 
     def rotate_world(self, pose, index, delta):
-        """Apply a world-space rotation to one joint, as a gizmo drag does."""
         transforms = self.transforms(pose)
         target = delta * transforms[index].rotation
         return self.set_rotation(pose, index, self.local_rotation_for(

@@ -1,8 +1,7 @@
-"""Create KSP paint layers using only Krita's public API.
+"""Paint layer creation through Krita's public API.
 
-No operation targets an existing user's node. Document identity comes from
-its root UUID because separate Python wrappers may reference the same image.
-The API does not promise an undo transaction for these calls; none is claimed.
+KSP only ever writes to layers it created. No undo transaction is claimed, because
+the API does not promise one for these calls.
 """
 
 from dataclasses import dataclass
@@ -127,7 +126,6 @@ def _prepare(document, bgra_bytes, width, height, snapshot, application):
 
 
 def layer_id(node):
-    """A node's identity as text, for remembering a layer KSP created."""
     try:
         identifier = node.uniqueId()
     except (AttributeError, RuntimeError):

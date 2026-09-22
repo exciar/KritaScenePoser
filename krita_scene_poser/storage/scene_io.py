@@ -1,23 +1,12 @@
-"""Pose and scene files (pure Python).
-
-Two versioned JSON formats, written the same deterministic way as
-``rig_io``: sorted keys, one-space indent, and a final read-back so KSP never
-writes a file it cannot open.
-
-``ksp-pose`` v1 holds one pose::
+"""Pose (ksp-pose v1) and scene (ksp-scene v1) files.
 
     {"format": "ksp-pose", "version": 1, "figure": "body_kun",
      "rotations": {"upper_arm.L": [w, x, y, z], ...},
      "root": {"translation": [x, y, z], "rotation": [w, x, y, z]}}
 
-Rotations are keyed by joint name, not index, so a pose saved on one figure
-applies to another with the same joint layout, and a rig missing a joint
-simply leaves it at rest.
-
-``ksp-scene`` v1 adds everything else the docker shows: the camera, the view
-mode, the line-art settings, the figure and layer opacities, and the output
-size. Unknown keys are ignored within a version, so later versions of KSP can
-add fields without breaking this reader.
+Rotations are keyed by joint name, so a pose moves between figures. A scene adds the
+camera, view mode, line settings, opacities, output size and body shape. Unknown keys
+are ignored within a version.
 """
 
 import json
@@ -96,7 +85,6 @@ def _document(text, expected):
 
 
 def pose_document(skeleton, pose, figure=""):
-    """The JSON-ready dictionary for one pose."""
     rotations = {}
     for joint, rotation in zip(skeleton.joints, pose.rotations):
         if not rotation.is_close(IDENTITY, 1e-9):  # Rest joints need no entry.

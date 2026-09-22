@@ -1,11 +1,8 @@
-"""KSP docker viewport: draws the shared pose session and forwards input.
+"""The docker's GL viewport: draws the shared session and forwards input.
 
-Posing logic lives in ``core.interaction`` and ``ui.session``; this widget
-only draws and translates events. It redraws only when Qt requests a paint
-(no timer). Reparenting (float/dock) may recreate the GL context, so
-resources are released on ``aboutToBeDestroyed`` and rebuilt in
-``initializeGL``. PyQt5 aborts the host process when an exception escapes a
-virtual override, so every override reports failures instead.
+Docking or floating may recreate the GL context, so resources are released on
+aboutToBeDestroyed and rebuilt in initializeGL. PyQt5 aborts Krita when an exception
+escapes a virtual override, so every override reports failures instead.
 """
 
 from PyQt5.QtCore import QEvent, Qt, pyqtSignal

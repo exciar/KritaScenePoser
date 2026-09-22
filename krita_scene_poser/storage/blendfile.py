@@ -1,19 +1,8 @@
-"""Minimal reader for Blender .blend files.
+"""Minimal .blend reader for the classic and large-header containers.
 
-Two container layouts are read:
-
-- the **classic header**, ``BLENDER`` plus pointer size, endianness and a
-  three-digit version (``BLENDER-v304``), with 20- or 24-byte block headers;
-- the **large header** that newer Blender versions write
-  (``BLENDER17-01v0500``), whose blocks carry 64-bit sizes and counts.
-
-Struct instances are decoded by field name through the file's own SDNA
-catalogue, so field offsets are never hard-coded and one reader copes with
-many Blender versions. This module never writes files.
-
-Compression: plain and gzip always; zstd only where Python has
-``compression.zstd`` (3.14 and newer). Krita ships Python 3.13, so a
-zstd-compressed file must be saved again with compression turned off.
+Fields are decoded by name through the file's own SDNA, so offsets are never
+hard-coded. zstd needs Python 3.14; Krita ships 3.13, so compressed files must be
+saved again without compression.
 """
 
 import bisect
@@ -177,7 +166,6 @@ class View:
         return self["id"].string("name")[2:]
 
     def deref(self, name):
-        """Follow a pointer field to the struct it addresses, or None."""
         return self.file.view(self[name])
 
 

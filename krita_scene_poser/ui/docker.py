@@ -487,7 +487,6 @@ class KSPDocker(DockWidget):
         self.set_pose_on_canvas(bool(checked))
 
     def set_pose_on_canvas(self, posing):
-        """Also used by the KSP: Pose on Canvas menu action."""
         try:
             self.ensure_loaded()
             self.canvas.set_posing(posing)
@@ -513,7 +512,6 @@ class KSPDocker(DockWidget):
             self._show_status("Settings could not be saved. " + describe(error))
 
     def _store_workspace(self):
-        """Keep the current pose and settings for the next Krita session."""
         if self.session.editor is None:
             return
         try:
@@ -661,11 +659,9 @@ class KSPDocker(DockWidget):
             QApplication.restoreOverrideCursor()
 
     def save_pose(self):
-        """Also used by the KSP: Save Pose menu action."""
         self._run_file_action(lambda: scene_files.save_pose(self, self.session))
 
     def load_pose(self):
-        """Also used by the KSP: Load Pose menu action."""
         self._run_file_action(lambda: scene_files.load_pose(self, self.session))
 
     def _apply_preset(self, *unused):
@@ -844,11 +840,9 @@ class KSPDocker(DockWidget):
     # Output ------------------------------------------------------------------
 
     def create_layer(self, *unused):
-        """Render the shaded posed figure into a layer (the guide)."""
         self._create("shaded", GUIDE_LAYER_NAME)
 
     def create_lineart_layer(self, *unused):
-        """Render the posed figure's line art into a layer."""
         self._create("lines", LINEART_LAYER_NAME)
 
     def _create(self, mode, name):

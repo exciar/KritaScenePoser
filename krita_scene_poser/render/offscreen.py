@@ -1,11 +1,7 @@
-"""Figure rendering in KSP's own offscreen GL context.
+"""KSP's own offscreen GL context, for the canvas overlay, layer export and Self-Test.
 
-Serves the canvas overlay, Create Layer, and Self-Test, so none of them
-depends on the docker viewport being visible. It uses the same pattern as the
-headless probe: a ``QOffscreenSurface`` plus a ``QOpenGLContext`` that shares
-Krita's global share context. Call it only from the UI thread. It leaves no
-context current afterwards; Krita's widgets make their own contexts current
-before drawing.
+UI thread only. It leaves no context current, since Krita's widgets make their own
+current before drawing.
 """
 
 from PyQt5.QtGui import QOffscreenSurface, QOpenGLContext, QSurfaceFormat

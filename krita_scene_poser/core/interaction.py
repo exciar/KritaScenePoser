@@ -1,12 +1,7 @@
-"""Pointer interaction shared by the docker viewport and the canvas overlay.
+"""Pointer handling shared by the docker viewport and the canvas overlay.
 
-Pure Python. A view converts its input to *camera-screen* coordinates: pixels
-of the image the camera renders, top-left origin. That is the viewport's own
-widget, or the document for the canvas overlay. ``Screen.pixel_scale`` is
-how many camera-screen pixels one pixel on the user's display spans, so pick
-tolerance, ring size, and drag speeds stay constant on screen at any canvas
-zoom. Gesture math stays consistent even on a rotated or mirrored canvas,
-because the rays and deltas are all measured in camera-screen space.
+Input arrives in camera-screen pixels. Screen.pixel_scale keeps pick tolerance, ring
+size and drag speed constant on screen at any canvas zoom.
 """
 
 from dataclasses import dataclass
@@ -64,7 +59,6 @@ class PoseInteraction:
         return (point - self.camera.eye()).normalized()
 
     def rings(self, screen):
-        """(pivot, axes, world radius) for the selected joint's rotation rings."""
         transform = self.editor.transforms()[self.editor.selected]
         radius = (self.camera.world_per_pixel(transform.position, screen.height)
                   * RING_PIXELS * screen.pixel_scale)
@@ -133,7 +127,6 @@ class PoseInteraction:
         return kind == "pose" and self.editor.end_drag()
 
     def cancel(self):
-        """Esc: abandon a pose drag and restore its starting pose."""
         cancelled = self.editor.cancel_drag()
         self.drag = None
         return cancelled

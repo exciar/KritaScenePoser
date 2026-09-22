@@ -1,9 +1,6 @@
-"""Authoritative pose state and posing gestures (pure Python).
+"""Pose state and posing gestures.
 
-The UI turns pointer events into rays and calls these methods; it never edits
-joints directly. Every drag recomputes from the pose at the gesture's start,
-so repeated events cannot drift. Esc (``cancel_drag``) restores that exact
-pose, and each completed gesture or command adds one undo entry.
+Each drag is recomputed from the pose at its start, so repeated events cannot drift.
 """
 
 from dataclasses import dataclass, replace
@@ -86,7 +83,6 @@ class PoseEditor:
         return self.picker.pick(ray, self.skeleton, self.pose, minimum_radius)
 
     def subtree(self, joint):
-        """``joint`` and all of its descendants (joints are ordered parents-first)."""
         members = [joint]
         for index in range(joint + 1, len(self.skeleton.joints)):
             if self.skeleton.joints[index].parent in members:
@@ -220,7 +216,6 @@ class PoseEditor:
         return self.history.record(before, pose)
 
     def replace_pose(self, pose):
-        """Put a whole pose in place, such as a loaded file, as one undo step."""
         return self._apply(pose)
 
     def reset_joint(self):
@@ -238,7 +233,6 @@ class PoseEditor:
         return self._apply(self.skeleton.mirror_pose(self.pose))
 
     def mirror_limb(self):
-        """Copy the selected limb's pose onto its other-side counterpart."""
         if self.selected is None or self.skeleton.mirror_indices[self.selected] == self.selected:
             return False
         targets = [self.skeleton.mirror_indices[i] for i in self.subtree(self.selected)]

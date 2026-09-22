@@ -1,8 +1,6 @@
-"""Figure shader sources and render snapshots. Pure Python (no Qt).
+"""Shader sources and render snapshots, free of Qt so they can be tested outside Krita.
 
-Kept separate from ``figure_renderer`` so the shaders' dialect translation and
-the skinning-row packing can be tested outside Krita. Sources are written in
-GLSL ES 1.00 and translated for desktop GLSL 1.20 and 1.50 core.
+Sources are GLSL ES 1.00, translated for desktop GLSL 1.20 and 1.50 core.
 """
 
 from dataclasses import dataclass

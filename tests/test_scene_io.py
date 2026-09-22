@@ -15,7 +15,6 @@ from krita_scene_poser.storage.scene_io import (
 
 
 def posed(skeleton):
-    """A pose using the root and several joints, all inside the limits."""
     pose = skeleton.rest_pose()
     for name, axis, angle in (("upper_arm.L", Z_AXIS, 0.7), ("forearm.L", X_AXIS, 1.1),
                               ("head", Y_AXIS, 0.3), ("thigh.R", X_AXIS, -0.4)):

@@ -1,14 +1,7 @@
-"""Turn an imported model into a KSP figure (pure Python).
+"""Convert an imported model into a KSP figure.
 
-Readers for each file format produce a :class:`SourceFigure`: bones with rest
-matrices, and meshes with positions, normals, and per-bone weights. This
-module maps those bones onto KSP's own joints, converts axes and units, and
-writes the same ``ksp-rig`` and ``KSPMESH`` data the shipped figures use. A
-figure imported this way is an ordinary figure everywhere else in KSP.
-
-Imported files are treated as hostile: every count is capped, every index is
-checked, and every failure raises :class:`FigureImportError` with a sentence a
-user can act on.
+Imported files are untrusted: counts are capped, indices are checked, and every
+failure raises FigureImportError with a message the user can act on.
 """
 
 from array import array
@@ -66,7 +59,6 @@ def _limb_names(pattern, left, right):
 
 
 def _sided(table):
-    """Expand a table written for the left side onto both sides."""
     result = {}
     for ksp, source in table.items():
         result[ksp + ".L"] = source.format(side="L", Side="Left", side_lower="left")
@@ -161,7 +153,6 @@ _build_parents()
 
 
 def normalized_name(name):
-    """A bone name reduced for comparison: no namespace, case, or separators."""
     text = str(name)
     if ":" in text:
         text = text.split(":")[-1]  # mixamorig:Hips -> Hips
@@ -370,7 +361,6 @@ def _nearest_mapped(bone, bones, mapping):
 
 
 def _axis_rotation(up):
-    """Rotate the source's up axis onto KSP's +Y."""
     if str(up).upper().startswith("Z"):
         return Quat.from_axis_angle(Vec3(1.0, 0.0, 0.0), -math.pi / 2)
     return Quat(1.0, 0.0, 0.0, 0.0)
@@ -392,7 +382,6 @@ def _rotation(matrix):
 
 
 def _parent_of(name, order):
-    """The nearest ancestor that is also a mapped joint."""
     parent = PARENTS.get(name)
     while parent is not None and parent not in order:
         parent = PARENTS.get(parent)
@@ -574,7 +563,6 @@ def _unit(vector):
 
 
 def guess_scale(height):
-    """A scale that brings an unbelievable model back to human size."""
     if not math.isfinite(height) or height <= 0.0:
         return 1.0
     if 0.3 <= height <= 4.0:

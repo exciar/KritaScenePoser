@@ -328,7 +328,6 @@ def main(args=None):
             return image, pixels, seconds
 
         def ink(pixels):
-            """Total line coverage in pixels (alpha-weighted)."""
             return sum(pixels[3::4]) / 255.0
 
         shaded_image, shaded, _ = render("shaded")

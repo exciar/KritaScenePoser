@@ -86,7 +86,6 @@ class DeformTests(unittest.TestCase):
         skeleton, original = rig.skeleton, self.rig.skeleton
 
         def arm(bones):
-            """Shoulder to wrist, which is upper arm plus forearm."""
             rest = bones.rest_transforms
             return (rest[bones.index("hand.L")].position
                     - rest[bones.index("upper_arm.L")].position).length()

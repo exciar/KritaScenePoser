@@ -1,8 +1,4 @@
-"""KSP-local pose undo/redo, separate from Krita's document undo.
-
-Poses are immutable, so each entry stores the pose before and after one
-completed gesture or command.
-"""
+"""Pose undo history, separate from Krita's document undo."""
 
 
 class PoseHistory:

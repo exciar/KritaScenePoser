@@ -1,12 +1,7 @@
-"""Joint picking on the CPU: the visible surface, with capsules as a broad phase.
+"""CPU picking against the visible surface, with capsules as a broad phase.
 
-Each joint has a capsule around its bone. The mouse ray is tested against
-generous bounding capsules first. Then only those joints' triangles are
-skinned to the current pose and tested, nearest candidate first, so a click
-selects the part whose surface is actually under the cursor. A near miss
-falls back to tighter capsules widened to a pen-friendly screen size. An ID
-render would also be exact, but GLSL ES 1.00 cannot keep per-vertex joint
-IDs from blending across a triangle.
+An ID render would be simpler, but GLSL ES 1.00 cannot keep joint ids from blending
+across a triangle.
 """
 
 import math
@@ -104,7 +99,6 @@ class JointCapsules:
         return JointCapsules(local_tails, radii)
 
     def segments(self, skeleton, pose, transforms=None):
-        """Posed (start, end) of every bone."""
         transforms = transforms or skeleton.transforms(pose)
         return [(t.position, t.position + t.rotation.rotate(tail * pose.root_scale))
                 for t, tail in zip(transforms, self.local_tails)]

@@ -2,20 +2,21 @@
 
 KSP ships with Body-chan and Body-kun. This guide explains how to bring in your own rigged models, and how to prepare them so they import cleanly.
 
-> **Status:** importing works from version 0.0.8. Open the KSP docker, go to the **Scene** tab, and click **Import Figure…**. How it works is recorded in the design notes.
->
-> One caveat: `.blend` files saved by **Blender 5** use a newer layout that KSP reads but that has never been tested against a file Blender 5 actually wrote. If a Blender 5 file gives you trouble, export `.glb` instead — and please send the file, so the reader can be checked against it.
+Importing works from version 0.0.8. Open the KSP docker, go to the **Scene** tab, and click **Import Figure…**.
+
+`.blend` files saved by Blender 5 use a newer layout. KSP reads it, but it has not been tested against a file Blender 5 actually wrote. If a Blender 5 file gives you trouble, export `.glb` instead, and consider opening an issue with the file attached so the reader can be checked against it.
 
 ## What you can import
 
 | Format | Where it comes from | Notes |
 | --- | --- | --- |
-| **`.glb`** (glTF 2.0 binary) | Blender (**File → Export → glTF 2.0**), VRoid Studio, many other 3D tools | The most dependable choice. A VRoid `.vrm` file is a `.glb` with extra data, so it can be imported too. |
-| **`.blend`** | Blender, saved directly | It must be saved **uncompressed**; see below. |
+| `.glb` (glTF 2.0 binary) | Blender (**File → Export → glTF 2.0**), VRoid Studio, many other 3D tools | The most dependable choice. A VRoid `.vrm` file is a `.glb` with extra data, so it can be imported too. |
+| `.blend` | Blender, saved directly | It must be saved uncompressed; see below. |
 
 FBX files, including Mixamo downloads, are not supported directly. Open them in Blender and export a `.glb`.
 
-**What KSP does for you on import:**
+### What happens on import
+
 - It recognizes Rigify, Mixamo, VRM and Blender metarig bone names, and reads a VRM file's own humanoid table when it has one.
 - It converts axes, so a Blender figure (Z up, facing −Y) arrives upright and facing the camera.
 - It checks which way the toes point and turns the figure around if it faces away.
@@ -32,36 +33,36 @@ Import runs entirely inside Krita, in pure Python. Blender is not needed to impo
 
 This checklist applies to both formats.
 
-1. **One armature, weighted meshes.**
+1. One armature, weighted meshes.
    - Every mesh that should move must be deformed by that armature: an Armature modifier plus vertex groups named after its bones, the usual Blender setup.
    - Unweighted vertices stay behind when you pose, and the importer reports how many there are.
-2. **Apply transforms.** Select the armature and the meshes, then **Object → Apply → All Transforms** (Ctrl+A). Scale should read 1.0 everywhere.
-3. **Real size, standing on the floor.**
+2. Apply transforms. Select the armature and the meshes, then **Object → Apply → All Transforms** (Ctrl+A). Scale should read 1.0 everywhere.
+3. Real size, standing on the floor.
    - Model in meters. The built-in figures are 1.64 m and 1.75 m tall.
    - The feet should rest at height 0, centered at the origin.
    - The figure should face Blender's front view (−Y). KSP converts axes itself.
-4. **Rest pose: T-pose or A-pose.** KSP's rest pose is whatever the armature's rest position is. Reset Pose returns there.
-5. **Bake or remove generating modifiers.**
+4. Rest pose: T-pose or A-pose. KSP's rest pose is whatever the armature's rest position is. Reset Pose returns there.
+5. Bake or remove generating modifiers.
    - The importer reads the base mesh and its weights; it does not evaluate modifiers.
    - For `.blend` files, apply Mirror, Subdivision, Solidify, and similar modifiers, or remove them. Keep only the Armature modifier.
    - For `.glb` files, the exporter's **Apply Modifiers** option does this for you.
-6. **Name sides consistently.** Use `.L`/`.R`, `_L`/`_R`, or `Left`/`Right`, so KSP can mirror poses and limbs.
-7. **Separate parts are optional.** Each mesh object becomes a *part*. Line art draws **seams** where parts meet, which is how the mannequin gets its segment lines.
+6. Name sides consistently. Use `.L`/`.R`, `_L`/`_R`, or `Left`/`Right`, so KSP can mirror poses and limbs.
+7. Separate parts are optional. Each mesh object becomes a part. Line art draws seams where parts meet, which is how the mannequin gets its segment lines.
    - A one-piece model works too; it relies on outlines, contours, and creases instead.
    - The limit is 254 parts.
-8. **Keep it reasonably light.**
+8. Keep it reasonably light.
    - Picking a body part runs in Python. The built-in figures have about 25,000–29,000 vertices; much denser meshes make clicking slower. Consider a Decimate pass for very heavy sculpts.
    - Up to 4 bone influences per vertex are kept. Extra influences are dropped and the rest renormalized.
-9. **Materials and textures are ignored.** KSP draws a neutral mannequin shader and line art.
-10. **Use a model you have the rights to.** Imported figures stay on your computer. They are never bundled with KSP or sent anywhere.
+9. Materials and textures are ignored. KSP draws a neutral mannequin shader and line art.
+10. Use a model you have the rights to. Imported figures stay on your computer. They are never bundled with KSP or sent anywhere.
 
 ### Saving a `.blend` for KSP
 
-- Save with **compression off**: in **File → Save As…**, open the options (⚙) and clear **Compress**.
+- Save with compression off: in **File → Save As…**, open the options (⚙) and clear **Compress**.
 - Krita's bundled Python cannot unpack Blender's zstd compression. A compressed file will be rejected with a message saying so.
 - KSP reads the classic `.blend` container (Blender 2.8 through 4.x) and the newer one Blender 5 writes (`BLENDER17-01v0500`, with 64-bit block sizes). The newer container is read but has not yet met a file Blender 5 actually saved, so export `.glb` if it gives you trouble.
 - Meshes saved in Blender's newer attribute layout are read by layer name. If KSP cannot find what it needs, it says so and asks for a `.glb`.
-- Keep only one figure's armature in the file, or tell the importer which armature to use.
+- Keep only one figure's armature in the file. If there are several, KSP uses the one that deforms the most meshes.
 
 ### Exporting a `.glb` from Blender
 
@@ -78,8 +79,8 @@ Compressed meshes (the Draco or meshopt options) are not supported; leave them o
 ## How your bones become KSP joints
 
 KSP poses a fixed set of 52 joints:
-- **Center:** hips, waist, torso, chest, neck, head.
-- **Each side:** shoulder, upper arm, forearm, hand, three segments for each of five fingers, thigh, shin, foot, toe.
+- Center: hips, waist, torso, chest, neck, head.
+- Each side: shoulder, upper arm, forearm, hand, three segments for each of five fingers, thigh, shin, foot, toe.
 
 Your bones are mapped onto these joints. A deform bone without its own joint is merged into its nearest mapped parent, as the mannequin's twist bones are. Extra bones, such as hair, tails, or skirt bones, therefore follow their parent (usually the head or hips); they cannot be posed on their own yet.
 
@@ -127,7 +128,7 @@ If your bones use other names, put a JSON file next to the model with the same n
 
 ### Partial rigs still work
 
-Only **hips** is required. Everything that is mapped can be posed with Drag and Rings, but some features need specific joints:
+Only `hips` is required. Everything that is mapped can be posed with Drag and Rings, but some features need specific joints:
 
 | Feature | Needs |
 | --- | --- |
@@ -140,7 +141,7 @@ A model without fingers, for example, poses normally; its hands just can't curl.
 
 ## Where imported figures live
 
-Imported figures are saved as `krita_scene_poser/figures/<name>.rig.json` and `<name>.mesh` in Krita's application-data folder — the same place KSP writes its diagnostic log. They appear in the figure list next to Body-chan and Body-kun, they survive KSP updates, and deleting those two files removes a figure.
+Imported figures are saved as `krita_scene_poser/figures/<name>.rig.json` and `<name>.mesh` in Krita's application-data folder, next to KSP's diagnostic log. They appear in the figure list next to Body-chan and Body-kun, they survive KSP updates, and deleting those two files removes a figure.
 
 KSP converts your model once, on import. The original file is never read again, and never modified.
 

@@ -1,9 +1,4 @@
-"""Orbit camera for the KSP viewport and its renders.
-
-The camera circles ``target``. Yaw 0 places it on +Z, facing a figure's
-front; positive pitch raises it above the target. Screen coordinates are in
-widget pixels with the origin at the top-left.
-"""
+"""Orbit camera. Yaw 0 looks at the figure's front from +Z; positive pitch looks down."""
 
 import math
 
@@ -85,7 +80,6 @@ class OrbitCamera:
         return self.projection(aspect) @ self.view()
 
     def world_per_pixel(self, point, height):
-        """World distance of one screen pixel at ``point``'s depth."""
         depth = self.distance if self.orthographic else max(
             (point - self.eye()).dot(self.forward()), 1e-6)
         return 2.0 * depth * math.tan(self.fov_y / 2.0) / height

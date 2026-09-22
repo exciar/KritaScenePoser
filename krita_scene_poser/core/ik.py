@@ -1,10 +1,4 @@
-"""Analytic two-bone IK for arms and legs.
-
-Solves joint positions only; ``core.skeleton`` turns them into rotations.
-The pole is a world point that the middle joint (elbow or knee) bends
-toward. When the pole cannot define a bend direction, the limb keeps its
-current bend plane, so dragging never flips the elbow unexpectedly.
-"""
+"""Analytic two-bone IK. Solves positions only; core.skeleton turns them into rotations."""
 
 import math
 from typing import NamedTuple

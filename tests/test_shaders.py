@@ -41,7 +41,6 @@ def declarations(source, kind):
 
 
 def declared_names(source):
-    """Identifiers the source declares: variables, parameters, and functions."""
     body = re.sub(r"^#.*$", "", source, flags=re.M)
     return set(re.findall(r"\b(?:float|int|bool|vec[234]|mat4|sampler2D|void)\s+(\w+)", body))
 
@@ -102,7 +101,6 @@ class ShaderTests(unittest.TestCase):
                 self.assertLessEqual(used, REQUIRED_UNIFORM_VECTORS)
 
     def test_depth_packing_survives_eight_bit_channels(self):
-        """Mirror the depth pass and the edge shader's decode on the CPU."""
         def fract(x):
             return x - math.floor(x)
         for t in (0.0, 1e-4, 0.123456, 0.5, 0.77777, 0.999999):

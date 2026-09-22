@@ -1,15 +1,6 @@
-"""Read a ``.blend`` file into a source figure.
+"""Read one armature and the meshes it deforms from a .blend file.
 
-Blender keeps a whole scene, so this module takes only what a posable figure
-needs: one armature, its bones' rest matrices, and the meshes deformed by it.
-
-Mesh data has moved twice in Blender's history. Both layouts are read: the
-``MVert``/``MLoop``/``MPoly`` arrays of older files, and the named attributes
-(``position``, ``.corner_vert``, face offsets) that newer versions write. A
-file whose meshes use neither is reported rather than half-read.
-
-Modifiers are not evaluated. A subdivision or mirror modifier must be applied
-in Blender first, which ``docs/custom-figures.md`` explains.
+Modifiers are not evaluated; subdivision or mirror must be applied in Blender first.
 """
 
 from ..core.math3d import Mat4, Vec3

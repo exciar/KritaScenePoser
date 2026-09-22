@@ -164,7 +164,6 @@ class View:
         return self["id"].string("name")[2:]
 
     def deref(self, name):
-        """Follow a pointer field to the struct it addresses, or None."""
         return self.file.view(self[name])
 
 

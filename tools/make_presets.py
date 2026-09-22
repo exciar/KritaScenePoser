@@ -57,21 +57,18 @@ class Builder:
         return (transforms[child].position - transforms[index].position).normalized()
 
     def aim(self, name, direction):
-        """Point the bone along a world direction."""
         index = self._index(name)
         self.pose = self.skeleton.rotate_world(
             self.pose, index, Quat.between(self.direction(name), Vec3(*direction).normalized()))
         return self
 
     def bend(self, name, axis, degrees):
-        """Turn the bone about a world axis."""
         index = self._index(name)
         self.pose = self.skeleton.rotate_world(
             self.pose, index, Quat.from_axis_angle(Vec3(*axis), math.radians(degrees)))
         return self
 
     def both(self, name, method, *args):
-        """Apply to the .L and .R counterparts, mirroring x for the right side."""
         for side in ("L", "R"):
             values = []
             for value in args:
@@ -101,7 +98,6 @@ class Builder:
         return self
 
     def twist(self, name, degrees):
-        """Roll the bone about its own length, which aims a hinge fold plane."""
         self.pose = self.skeleton.rotate_world(
             self.pose, self._index(name),
             Quat.from_axis_angle(self.direction(name), math.radians(degrees)))
@@ -145,7 +141,6 @@ class Builder:
 
 
 def t_pose(b):
-    """Arms straight out to the sides."""
     for side, x in (("L", 1.0), ("R", -1.0)):
         b.aim("upper_arm." + side, (x, 0.0, 0.0)).aim("forearm." + side, (x, 0.0, 0.0))
         b.aim("hand." + side, (x, 0.0, 0.0))

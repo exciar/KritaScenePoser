@@ -78,7 +78,6 @@ class PoseSession(QObject):
         self.changed.emit()
 
     def perform(self, action):
-        """Run a named command from a key, a button, or a menu action."""
         editor = self.editor
         if action == "frame":
             self.frame()
@@ -136,7 +135,6 @@ class PoseSession(QObject):
             self.changed.emit()
 
     def set_limits(self, enabled):
-        """Joint limits apply to the figure that is loaded, and to later ones."""
         self.limits = bool(enabled)
         if self.editor is not None:
             self.editor.skeleton.limits_enabled = self.limits
@@ -146,7 +144,6 @@ class PoseSession(QObject):
         self.last_layer = (document_id, node_id, name)
 
     def layer_target(self, document_id):
-        """The node id KSP may rewrite in this document, or ``None``."""
         if self.last_layer and self.last_layer[0] == document_id:
             return self.last_layer[1]
         return None

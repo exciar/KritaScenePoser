@@ -1,9 +1,4 @@
-"""Import a figure from a file the user picks.
-
-The readers and the converter are pure Python in ``storage``; this module is
-only the part that must know about Qt and about where Krita keeps its data.
-Every failure returns a message for the status line.
-"""
+"""File dialog and storage location for figure import; the conversion is in storage."""
 
 import os
 
@@ -23,12 +18,10 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 
 
 def figures_folder():
-    """Where imported figures live, created when one is first saved."""
     return ksp_settings.data_directory("figures")
 
 
 def folders():
-    """Every folder KSP looks in for figures, bundled first."""
     try:
         return [ksp_figures.default_folder(), figures_folder()]
     except Exception:
@@ -77,7 +70,6 @@ def _display_name(stem):
 
 
 def _custom_map(path):
-    """A ``<model>.ksp-map.json`` beside the model, if the user wrote one."""
     for candidate in (os.path.splitext(path)[0] + MAP_SUFFIX, path + MAP_SUFFIX):
         if os.path.isfile(candidate):
             with open(candidate, encoding="utf-8") as handle:

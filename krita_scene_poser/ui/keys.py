@@ -1,8 +1,7 @@
-"""KSP pose shortcuts, shared by the docker viewport and the canvas overlay.
+"""Pose shortcuts for the docker viewport and the canvas overlay.
 
-They apply only while a KSP view has keyboard focus. The views claim these
-keys through ``QEvent.ShortcutOverride`` so that Krita's window-wide
-shortcuts, such as Ctrl+Z for document undo, do not consume them first.
+The views claim these keys through ShortcutOverride, or Krita's window shortcuts
+(Ctrl+Z for document undo) would take them first.
 """
 
 from PyQt5.QtCore import Qt
@@ -17,5 +16,4 @@ SHORTCUTS = {
 
 
 def shortcut(event):
-    """The KSP action for a key event, or None."""
     return SHORTCUTS.get((event.key(), int(event.modifiers()) & MODIFIERS))

@@ -1,10 +1,7 @@
-"""The only KSP code that relies on Krita's undocumented widget structure.
+"""The only code that depends on Krita's undocumented widget tree.
 
-Krita's Python API documents coordinate transforms but not the canvas widget.
-This module finds the widget in Qt's widget tree by class name, so a future
-Krita can break it. Every function reports failure as a reason string rather
-than raising, and callers disable canvas posing when that happens. See
-the design notes.
+Every function returns a reason instead of raising, and canvas posing turns itself
+off when the lookup fails.
 """
 
 from PyQt5.QtCore import QEvent, QObject, pyqtSignal
@@ -15,7 +12,6 @@ WATCHED_EVENTS = (QEvent.Resize, QEvent.Paint, QEvent.UpdateRequest, QEvent.Show
 
 
 def find_canvas_widget(window):
-    """``(widget, None)`` for the window's active view, or ``(None, reason)``."""
     try:
         main = window.qwindow() if window is not None else None
         if main is None:

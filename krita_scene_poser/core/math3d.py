@@ -1,13 +1,8 @@
-"""Small 3D math for posing: vectors, quaternions, 4x4 matrices, rays.
+"""Vectors, quaternions, 4x4 matrices and rays, without NumPy.
 
-Pure Python; no NumPy. Conventions shared with the renderer:
-
-- Right-handed coordinates, Y up; cameras look down -Z (OpenGL).
-- ``Mat4`` stores 16 floats column-major, as ``glUniformMatrix4fv`` expects
-  without transposition: element (row r, column c) is ``m[c * 4 + r]``.
-  Matrices multiply column vectors, so ``world = parent @ local``.
-- Quaternions are ``(w, x, y, z)``; rotations use unit quaternions.
-- Angles are radians. Screen coordinates start at the top-left, y down.
+Right-handed, Y up, cameras look down -Z. Mat4 is column-major (element (r, c) is
+m[c * 4 + r]) so it goes straight to glUniformMatrix4fv. Quaternions are
+(w, x, y, z). Angles are radians; screen y points down.
 """
 
 import math
@@ -118,7 +113,6 @@ class Quat(NamedTuple):
         return q.normalized()
 
     def __mul__(self, other):
-        """Hamilton product: ``(a * b).rotate(v) == a.rotate(b.rotate(v))``."""
         w1, x1, y1, z1 = self
         w2, x2, y2, z2 = other
         return Quat(w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
@@ -145,7 +139,6 @@ class Quat(NamedTuple):
         return Quat(self.w, -self.x, -self.y, -self.z)
 
     def inverse(self):
-        """Inverse of a unit quaternion."""
         return self.conjugate()
 
     def rotate(self, v):
@@ -154,7 +147,6 @@ class Quat(NamedTuple):
         return v + t * self.w + u.cross(t)
 
     def angle(self):
-        """Rotation angle in [0, pi]."""
         return 2.0 * math.acos(min(1.0, abs(self.w)))
 
     def slerp(self, other, t):
@@ -218,7 +210,6 @@ class Mat4:
 
     @staticmethod
     def perspective(fov_y, aspect, near, far):
-        """OpenGL projection: the view volume maps to NDC with z in [-1, 1]."""
         if not (0.0 < fov_y < math.pi and aspect > 0.0 and 0.0 < near < far):
             raise ValueError("Invalid perspective parameters.")
         f = 1.0 / math.tan(fov_y / 2.0)
@@ -268,7 +259,6 @@ class Mat4:
         return Vec3(x, y, z)
 
     def transform_vector(self, v):
-        """Transform of a direction (w = 0): ignores translation."""
         x, y, z, _ = self.transform4(v.x, v.y, v.z, 0.0)
         return Vec3(x, y, z)
 
@@ -354,7 +344,6 @@ class Ray(NamedTuple):
 
 
 def project(point, view_projection, width, height):
-    """World point to ``(x, y, ndc_depth)`` in pixels, or None behind the camera."""
     x, y, z, w = view_projection.transform4(point.x, point.y, point.z, 1.0)
     if w <= EPSILON:
         return None
@@ -371,7 +360,6 @@ def unproject(x, y, ndc_depth, inverse_view_projection, width, height):
 
 
 def ray_from_screen(x, y, inverse_view_projection, width, height):
-    """Ray from the near plane through a pixel, for picking and dragging."""
     near = unproject(x, y, -1.0, inverse_view_projection, width, height)
     far = unproject(x, y, 1.0, inverse_view_projection, width, height)
     return Ray(near, (far - near).normalized())

@@ -13,7 +13,6 @@ from krita_scene_poser.core.skeleton import (
 
 
 def build(spec):
-    """Skeleton from (name, parent, world position, world rotation) at rest."""
     joints, world, index = [], {}, {}
     for name, parent, position, rotation in spec:
         if parent is None:

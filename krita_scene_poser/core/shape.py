@@ -1,18 +1,4 @@
-"""Body shape: proportions and build, applied to the rest figure (pure Python).
-
-The mannequin has no morph targets, so shape is procedural. Each joint gets a
-*length* factor along its bone and a *girth* factor across it. Those factors
-build one affine transform per joint, in the figure's rest pose, and the rest
-mesh is deformed by blending them with the skin weights it already has.
-
-Deforming the rest pose, rather than the posed figure, keeps everything else
-true: the skeleton is rebuilt from the same transforms, so skinning at rest is
-still the identity, and posing, IK, picking, and line art work on the new body
-without knowing that a shape was applied.
-
-Normals are carried by the inverse transpose of the same blend, so a thicker
-waist still lights correctly; they are not recomputed from the triangles.
-"""
+"""Body shape: per-joint length and girth factors applied to the rest figure."""
 
 from dataclasses import asdict, dataclass, fields, replace
 import json

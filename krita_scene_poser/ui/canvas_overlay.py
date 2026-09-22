@@ -1,12 +1,7 @@
-"""Show and pose the figure directly on Krita's canvas.
+"""Show and pose the figure on Krita's canvas through a transparent overlay.
 
-``CanvasOverlay`` is a transparent child widget laid over Krita's canvas
-widget. It draws KSP's render through Krita's own image-to-widget transform,
-so canvas zoom, rotation, and mirror apply to the figure. While Pose on Canvas
-is off, the overlay ignores the mouse and Krita's tools work as usual. While
-it is on, the left button poses the figure or, on empty space, moves the 3D
-camera. The wheel, the middle and right buttons, and unclaimed keys still
-reach Krita, because the overlay leaves them unaccepted.
+With posing off the overlay ignores the mouse. With it on, only the left button is
+taken; the wheel, middle and right buttons still reach Krita.
 """
 
 import math
@@ -52,7 +47,6 @@ class CanvasOverlay(QWidget):
     # Geometry --------------------------------------------------------------------
 
     def follow_canvas(self):
-        """Track the canvas size and Krita's zoom, rotation, mirror, and pan."""
         try:
             parent = self.parentWidget()
             if parent is not None and self.geometry() != parent.rect():

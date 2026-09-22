@@ -21,7 +21,6 @@ def modules(*packages):
 
 
 def imported_names(path):
-    """Absolute dotted names of every import in ``path``."""
     relative_parts = path.relative_to(PACKAGE.parent).with_suffix("").parts
     tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
     for node in ast.walk(tree):

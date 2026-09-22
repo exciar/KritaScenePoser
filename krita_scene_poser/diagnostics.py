@@ -1,8 +1,5 @@
-"""Local environment report for compatibility records.
-
-The report is built only when requested and copied to the clipboard by the
-user; nothing is sent anywhere. It holds versions and GPU capabilities, never
-file paths, user names, or document names.
+"""Environment report for bug reports, built only on request. It holds versions and GPU
+details, never file paths or document names.
 """
 
 import json
@@ -58,7 +55,6 @@ def collect(renderer_details=None, probe=None, error=None, document=None, canvas
 
 
 def format_report(data):
-    """Deterministic plain text suitable for pasting into the compatibility notes."""
     lines = ["KSP diagnostics"]
     for section in SECTIONS:
         lines.append("[{}]".format(section))
