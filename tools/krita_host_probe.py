@@ -309,10 +309,15 @@ def main(args=None):
         rig, mesh = load_figure("body_kun")
         renderer.set_mesh("body_kun", mesh)
         skeleton = rig.skeleton
-        # A bundled pose holds both forearms across the body, which is exactly
-        # what contour lines are for: one part passing in front of another.
-        from krita_scene_poser.storage.presets import load_preset
-        pose = load_preset("hands-clasped", skeleton).pose
+        # The fixture holds both forearms across the body, which is what
+        # contour lines are for: one part passing in front of another. It is a
+        # fixture rather than a bundled pose so the check survives the poses
+        # being replaced.
+        from krita_scene_poser.storage.scene_io import read_pose
+        fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "fixtures", "crossed-arms.pose.json")
+        with open(fixture, encoding="utf-8") as handle:
+            pose = read_pose(handle.read(), skeleton).pose
         camera = OrbitCamera(pitch=0.05, yaw=0.35)
         camera.frame([j.position for j in rig.joints] + [j.tail for j in rig.joints])
         width, height = 360, 540
