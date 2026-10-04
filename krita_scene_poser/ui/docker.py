@@ -411,7 +411,12 @@ class KSPDocker(DockWidget):
         import_button.setToolTip("Add your own rigged figure from a .glb, .vrm, or .blend "
                                  "file. It joins the figure list and stays there.")
         import_button.clicked.connect(self.import_figure)
-        grid.addWidget(import_button, 3, 0, 1, 2)
+        grid.addWidget(import_button, 3, 0)
+        pose_button = QPushButton("Import Pose\u2026")
+        pose_button.setToolTip("Copy the pose out of a posed .glb or .vrm onto this figure, "
+                               "for posing in Blender and finishing here.")
+        pose_button.clicked.connect(self.import_pose)
+        grid.addWidget(pose_button, 3, 1)
         page = QWidget()
         page.setLayout(grid)
         return page
@@ -657,6 +662,10 @@ class KSPDocker(DockWidget):
             self._show_status(message)
         finally:
             QApplication.restoreOverrideCursor()
+
+    def import_pose(self, *unused):
+        """Put the pose from a model the user picks onto the current figure."""
+        self._run_file_action(lambda: scene_files.import_pose(self, self.session))
 
     def save_pose(self):
         self._run_file_action(lambda: scene_files.save_pose(self, self.session))

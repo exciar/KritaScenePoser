@@ -14,6 +14,7 @@ from ..storage.import_glb import custom_map_from_vrm, read_glb
 
 FILTER = ("3D figures (*.glb *.vrm *.blend);;glTF binary (*.glb);;VRM (*.vrm);;"
           "Blender (*.blend)")
+POSE_FILTER = "Posed models (*.glb *.vrm);;glTF binary (*.glb);;VRM (*.vrm)"
 MAX_FILE_BYTES = 256 * 1024 * 1024
 
 
@@ -45,7 +46,7 @@ def import_file(path, known_ids=()):
     name = os.path.basename(path)
     stem, extension = os.path.splitext(name)
     extension = extension.lower()
-    custom = _custom_map(path)
+    custom = custom_map_for(path)
     if extension in (".glb", ".vrm"):
         with open(path, "rb") as handle:
             data = handle.read()
@@ -69,7 +70,7 @@ def _display_name(stem):
     return text[:1].upper() + text[1:] if text else "Imported figure"
 
 
-def _custom_map(path):
+def custom_map_for(path):
     for candidate in (os.path.splitext(path)[0] + MAP_SUFFIX, path + MAP_SUFFIX):
         if os.path.isfile(candidate):
             with open(candidate, encoding="utf-8") as handle:

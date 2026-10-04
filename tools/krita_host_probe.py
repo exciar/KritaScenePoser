@@ -581,6 +581,50 @@ def main(args=None):
             result[figure] = applied
         return {"presets": [preset for preset, _ in presets], "joints_applied": result}
 
+    def import_pose_step():
+        # A pose posed elsewhere must land on a bundled figure, inside its limits,
+        # and render as a changed figure in Krita's own Python.
+        from krita_scene_poser.core.camera import OrbitCamera
+        from krita_scene_poser.core.limits import is_limited
+        from krita_scene_poser.render.shaders import snapshot
+        from krita_scene_poser.storage.figures import load_figure
+        from krita_scene_poser.storage.import_pose import read_pose as read_posed_model
+        here = os.path.dirname(os.path.dirname(os.path.abspath(
+            sys.modules["krita_scene_poser"].__file__)))
+        fixtures = os.path.join(here, "tests")
+        if fixtures not in sys.path:
+            sys.path.insert(0, fixtures)
+        from glb_fixtures import posed_glb  # A posed model built in the tests, not shipped.
+
+        rig, mesh = load_figure("body_kun")
+        skeleton = rig.skeleton
+        start = time.perf_counter()
+        result = read_posed_model(posed_glb(), skeleton, "probe-pose.glb")
+        seconds = time.perf_counter() - start
+        legal = not any(is_limited(skeleton.limits[index], rotation, 1e-3)
+                        for index, rotation in enumerate(result.pose.rotations))
+        renderer = state["figure_renderer"]
+        renderer.set_mesh("body_kun", mesh)
+        camera = OrbitCamera(pitch=0.0)
+        camera.frame([joint.position for joint in rig.joints])
+        width, height = 200, 300
+        images = {}
+        for label, pose in (("rest", skeleton.rest_pose()), ("posed", result.pose)):
+            shot = snapshot(skeleton, pose, camera, width / height, grid=False)
+            images[label] = qimage_to_bgra(renderer.render_image(shot, width, height))
+        changed = sum(1 for index in range(0, len(images["rest"]), 4)
+                      if images["rest"][index:index + 4] != images["posed"][index:index + 4])
+        checks = {
+            "joints_taken": len(result.applied) >= 20,
+            "inside_limits": legal,
+            "figure_moved": changed > 500,
+            "hips_lowered": result.pose.root_translation.y < -0.05,
+        }
+        if not all(checks.values()):
+            raise RuntimeError("Pose import checks failed: {}".format(checks))
+        return {"checks": checks, "joints": len(result.applied), "scheme": result.scheme,
+                "pixels_changed": changed, "seconds": round(seconds, 3)}
+
     def export_custom_size(target):
         # A layer that is not the document's size, placed by its anchor, with
         # pixels kept outside the canvas.
@@ -734,6 +778,7 @@ def main(args=None):
             _run(report, "render_opacity", render_opacity)
             _run(report, "render_shape", render_shape)
             _run(report, "import_figure", import_figure)
+            _run(report, "import_pose", import_pose_step)
     _run(report, "offscreen_renderer", offscreen_renderer)
     state["documents"] = []
     for profile in EXPORT_PROFILES:

@@ -5,6 +5,7 @@ documents exactly what shape of file the reader is expected to accept.
 """
 
 import json
+import math
 import struct
 
 from krita_scene_poser.core.math3d import Mat4, Quat, Vec3
@@ -56,10 +57,15 @@ def box(center, size=(0.12, 0.2, 0.1)):
 class GlbBuilder:
     """Assembles a .glb from bone and mesh descriptions."""
 
-    def __init__(self, skeleton=SKELETON, flip_facing=False, scale=1.0):
+    def __init__(self, skeleton=SKELETON, flip_facing=False, scale=1.0, pose=None,
+                 pose_shift=None):
         self.skeleton = skeleton
         self.flip = flip_facing
         self.scale = scale
+        # A posed file: node transforms carry the pose, bind matrices the rest
+        # position, which is what an exporter writes for a posed armature.
+        self.pose = dict(pose or {})
+        self.pose_shift = dict(pose_shift or {})
         self.binary = bytearray()
         self.views = []
         self.accessors = []
@@ -95,6 +101,21 @@ class GlbBuilder:
         x, y, z = (value * self.scale for value in point)
         return (-x, y, -z) if self.flip else (x, y, z)
 
+    def _apply_pose(self, nodes, index_of):
+        """Put the pose on the nodes, leaving the bind matrices at rest."""
+        half_turn = Quat.from_axis_angle(Vec3(0.0, 1.0, 0.0), math.pi)
+        for name, turn in self.pose.items():
+            if self.flip:  # The same real pose on a rig that faces the other way.
+                turn = (half_turn * turn * half_turn.inverse()).normalized()
+            nodes[index_of[name]]["rotation"] = [turn.x, turn.y, turn.z, turn.w]
+        for name, shift in self.pose_shift.items():
+            x, y, z = shift
+            x, z = (-x, -z) if self.flip else (x, z)
+            node = nodes[index_of[name]]
+            node["translation"] = [node["translation"][0] + x * self.scale,
+                                   node["translation"][1] + y * self.scale,
+                                   node["translation"][2] + z * self.scale]
+
     def build(self, parts=None, with_normals=True, vrm=False, extras=None):
         names = [name for name, _, _ in self.skeleton]
         index_of = {name: index for index, name in enumerate(names)}
@@ -113,6 +134,7 @@ class GlbBuilder:
         for node in nodes:
             if not node["children"]:
                 node.pop("children")
+        self._apply_pose(nodes, index_of)
 
         binds = []
         for name in names:
@@ -192,5 +214,15 @@ def pack(document, binary):
 
 def simple_glb(**options):
     return GlbBuilder(**{k: v for k, v in options.items()
-                         if k in ("skeleton", "flip_facing", "scale")}).build(
+                         if k in ("skeleton", "flip_facing", "scale", "pose", "pose_shift")}).build(
         **{k: v for k, v in options.items() if k in ("parts", "with_normals", "vrm", "extras")})
+
+
+def posed_glb(**options):
+    """A file whose armature is posed: the elbow folded and the hips lowered."""
+    options.setdefault("pose", {
+        "mixamorig:LeftForeArm": Quat.from_axis_angle(Vec3(0.0, 1.0, 0.0), -1.0),
+        "mixamorig:LeftUpLeg": Quat.from_axis_angle(Vec3(1.0, 0.0, 0.0), 0.5),
+    })
+    options.setdefault("pose_shift", {"mixamorig:Hips": (0.0, -0.1, 0.0)})
+    return simple_glb(**options)

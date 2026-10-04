@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import QFileDialog
 
 from ..integration import settings as ksp_settings
 from ..storage import presets as ksp_presets
+from ..storage.import_figure import FigureImportError
+from . import import_figure as figure_import
 
 POSE_FILTER = "KSP pose (*.pose.json)"
 SCENE_FILTER = "KSP scene (*.scene.json)"
@@ -70,6 +72,25 @@ def load_scene(parent, session):
         return ""
     scene = session.load_scene_text(_read(path))
     return "{} {}".format(os.path.basename(path), scene.applied.describe(_figure_name(session)))
+
+
+def import_pose(parent, session):
+    """Take the pose from a posed model file, as one undo step."""
+    path, _ = QFileDialog.getOpenFileName(parent, "Import a pose", _start_directory(),
+                                          figure_import.POSE_FILTER)
+    if not path:
+        return ""
+    size = os.path.getsize(path)
+    if size > figure_import.MAX_FILE_BYTES:
+        raise FigureImportError(
+            "That file is {:.0f} MB. KSP reads models up to {:.0f} MB.".format(
+                size / 1e6, figure_import.MAX_FILE_BYTES / 1e6))
+    with open(path, "rb") as handle:
+        data = handle.read()
+    name = os.path.basename(path)
+    result = session.load_pose_file(
+        data, name, custom_map=figure_import.custom_map_for(path))
+    return "{} {}".format(name, result.describe(_figure_name(session)))
 
 
 def apply_preset(session, preset):

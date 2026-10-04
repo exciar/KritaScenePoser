@@ -47,6 +47,34 @@ def read_glb(data, name=""):
     return figure
 
 
+def read_glb_pose(data, name=""):
+    """The bind skeleton and the pose the file was saved in.
+
+    Returns ``(bones, posed, source)``: bind-pose bones, each bone's posed world
+    matrix by name, and where the data came from. An exporter writes the current
+    pose into the node transforms and the bind pose into the inverse bind
+    matrices, so the difference between the two is the pose to copy.
+    """
+    document, binary = _chunks(data)
+    _check_support(document)
+    buffers = _buffers(document, binary)
+    nodes = document.get("nodes") or []
+    if not isinstance(nodes, list):
+        raise FigureImportError("The file's node list is damaged.")
+    skin = _skin(document)
+    if not isinstance(skin.get("inverseBindMatrices"), int):
+        raise FigureImportError(
+            "This file has no bind matrices, so KSP cannot tell the pose from the rest "
+            "position. Export it again from Blender together with its armature.")
+    bones, bone_names = _bones(document, nodes, skin, buffers)
+    world, _ = _world_matrices(nodes)
+    posed = {bone_names[index]: world.get(index, Mat4.identity())
+             for index in skin["joints"] if isinstance(index, int) and index in bone_names}
+    source = {"format": "glb", "file": name, "bones": len(bones),
+              "generator": _text(document.get("asset", {}).get("generator", ""))}
+    return bones, posed, source
+
+
 def custom_map_from_vrm(data):
     """A bone map from a VRM humanoid table, or ``None`` for a plain glTF."""
     document, _ = _chunks(data)

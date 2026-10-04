@@ -8,7 +8,7 @@ from ..core.lineart import LineArtSettings
 from ..core.output import OutputSettings
 from ..core.picking import FigurePicker
 from ..core.shape import BodyShape
-from ..storage import scene_io
+from ..storage import import_pose, scene_io
 from ..storage.shaping import figure_key, shaped_figure
 
 MODES = ("shaded", "lines", "both")
@@ -168,6 +168,14 @@ class PoseSession(QObject):
         editor.replace_pose(applied.pose)
         self.changed.emit()
         return applied
+
+    def load_pose_file(self, data, name, custom_map=None):
+        """Take the pose from a posed model file; returns what it did."""
+        editor = self._require_figure()
+        result = import_pose.read_pose(data, editor.skeleton, name, custom_map=custom_map)
+        editor.replace_pose(result.pose)
+        self.changed.emit()
+        return result
 
     def load_scene_text(self, text):
         """Apply a stored scene, including the camera and every setting."""

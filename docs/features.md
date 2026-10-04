@@ -148,6 +148,8 @@ Version 0.0.9.
 - Poses portable between figures
 - Report of joints not used
 - Limits enforced on load
+- Import Pose… from a posed `.glb` or `.vrm`
+- Pose in Blender, finish in KSP
 
 ## Scenes and workspace
 

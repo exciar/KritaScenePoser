@@ -139,6 +139,38 @@ Only `hips` is required. Everything that is mapped can be posed with Drag and Ri
 
 A model without fingers, for example, poses normally; its hands just can't curl.
 
+## Posing in Blender and bringing the pose back
+
+**Scene → Import Pose…** copies the pose out of a posed `.glb` or `.vrm` onto the figure you already have open. The figure does not change: only its pose does, as one undo step, so Reset Pose or Ctrl+Z puts it back.
+
+This works because an exporter writes the pose into the node transforms and the rest position into the bind matrices, so KSP can tell them apart. A `.blend` file carries its pose somewhere KSP does not read, so pose import is `.glb` and `.vrm` only.
+
+To pose the bundled figures in Blender, open the source file named in [asset-licenses.md](asset-licenses.md) and pose its Rigify rig, or pose any rig KSP can name.
+
+1. Pose the armature in Pose Mode. Leave the rest position alone.
+2. **File → Export → glTF 2.0 (.glb/.gltf)**, with the same settings as for a figure: glTF Binary, the armature and its meshes selected, and Export Deformation Bones Only on.
+3. Leave any "rest position" option off, since that would export the pose away.
+4. In KSP, open the **Scene** tab and click **Import Pose…**.
+
+What travels and what does not:
+
+- Only the turn of each bone travels, plus how far the hips moved, scaled to the figure's own size. Bone lengths stay the figure's own, so a pose from a tall rig does not stretch it.
+- Joint limits apply as they do to a drag, so an elbow bent backwards in Blender arrives at its stop. Switch **Joint limits** off first if you meant it.
+- Joints the file has no bone for stay at rest, and the status line counts them.
+- Bone names are matched exactly as for figures, so a rig KSP cannot name needs a `.ksp-map.json` file beside the model. Only `hips` is required.
+- A rig that faces away is turned around, the same way a figure is.
+
+### Many poses at once
+
+`tools/import_pose.py` converts files straight into the bundled pose folder, which is how a preset library gets built:
+
+```console
+py -3.14 tools/import_pose.py poses/*.glb
+py -3.14 tools/import_pose.py sitting.glb --name "Sitting on floor" --ground
+```
+
+One file is one pose, and the file name becomes the pose's name: `sitting-on-floor.glb` becomes "Sitting on floor". It prints how many joints each pose took and how far the figure stands off the floor; `--ground` drops it onto the floor, which is worth doing for sitting and kneeling poses and wrong for a jump. Check the result with `py -3.14 tools/preview_poses.py`.
+
 ## Where imported figures live
 
 Imported figures are saved as `krita_scene_poser/figures/<name>.rig.json` and `<name>.mesh` in Krita's application-data folder, next to KSP's diagnostic log. They appear in the figure list next to Body-chan and Body-kun, they survive KSP updates, and deleting those two files removes a figure.
