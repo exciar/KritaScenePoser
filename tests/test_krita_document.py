@@ -1,7 +1,6 @@
 """Document integration safety tests with Krita API test doubles.
 
-These establish the export contract only; real Krita behavior is recorded in
-the compatibility notes.
+These establish the export contract only, not real Krita behavior.
 """
 
 import unittest

@@ -1,6 +1,6 @@
 # Krita Scene Poser (KSP)
 
-KSP is a posing docker for Krita. This is an early development build, version `0.0.9`. Pose Body-chan or Body-kun in the docker, or directly on the canvas with **Pose on Canvas**, much like Clip Studio Paint's 3D figures. Drag body parts or rotate joints with rings, start from a bundled pose, and save your own. Joints stop where a body's would, and fifteen sliders reshape the body itself. Then add the figure to your document as a transparent **line art** layer or a shaded guide layer, at the size and opacity you choose. You can also bring in your own rigged figures from `.glb`, `.vrm` and `.blend` files.
+KSP is a posing docker for Krita. This is an early development build, version `0.0.10`. Pose Body-chan or Body-kun in the docker, or directly on the canvas with **Pose on Canvas**, much like Clip Studio Paint's 3D figures. Drag body parts or rotate joints with rings, start from a bundled pose, and save your own. Joints stop where a body's would, and fifteen sliders reshape the body itself. Then add the figure to your document as a transparent **line art** layer or a shaded guide layer, at the size and opacity you choose. You can also bring in your own rigged figures from `.glb`, `.vrm` and `.blend` files.
 
 The plugin runs with Krita's bundled Python, PyQt5, and the Python standard library. It does not install packages, contact a server, or run Blender or other external tools. A separate Python installation is only useful for development tests and packaging.
 
@@ -8,7 +8,7 @@ Compatibility is not yet certified. Automated checks outside Krita cannot establ
 
 ## Install and enable
 
-1. Build the ZIP below, or use the supplied `dist/ksp-0.0.9.zip`. Earlier builds stay in `dist/` for comparison; install only one at a time.
+1. Build the ZIP below, or use the supplied `dist/ksp-0.0.10.zip`. Earlier builds stay in `dist/` for comparison; install only one at a time.
 2. In Krita choose **Tools → Scripts → Import Python Plugin…** and select the ZIP. Restart Krita.
 3. Open **Settings → Configure Krita → Python Plugin Manager**, enable **KSP — Krita Scene Poser**, and restart Krita again.
 4. Open **Settings → Dockers → KSP — Krita Scene Poser**.
@@ -16,8 +16,6 @@ Compatibility is not yet certified. Automated checks outside Krita cannot establ
 For a manual install, use **Settings → Manage Resources → Open Resource Folder**. Copy the ZIP's `krita_scene_poser.desktop` file and `krita_scene_poser` directory directly into that resource folder's `pykrita` directory, then enable the plugin and restart. The archive must not be nested inside another enclosing directory. These steps follow [Krita's plugin installation guide](https://docs.krita.org/en/user_manual/python_scripting/install_custom_python_plugin.html).
 
 ## Pose a figure
-
-![Posed figures rendered by KSP on the GPU](docs/images/gpu-posed-figures.png)
 
 Choose **Body-chan** or **Body-kun** at the top of the docker; switching keeps the pose. Click a body part to select it; the hint line says what dragging it does.
 
@@ -78,20 +76,7 @@ Build: chest, waist, hips, arm thickness, leg thickness, and an overall build sl
 
 Shape is a property of the figure, not a pose change, so it is not in the pose undo history.
 
-## Poses, presets, and scenes
-
-![The bundled poses, front and side](docs/images/pose-presets.png)
-
-The **Scene** tab holds nine bundled poses: T-pose, relaxed stance, sitting, kneeling, walking, running, hands clasped, reaching up and crouching. Choose one and press **Apply Pose**; it is a single undo step.
-
-- **Save Pose…** and **Load Pose…** store just the pose. Poses are keyed by joint name, so one saved on Body-chan applies to Body-kun and to imported figures.
-- **Save Scene…** and **Load Scene…** also keep the camera, the view mode, the line-art settings, both opacities, and the output size.
-- KSP remembers your last pose and settings and restores them when the docker opens again. This is stored with Krita's settings, not in your document.
-- The same actions are under **Tools → Scripts** as **KSP: Save Pose…** and **KSP: Load Pose…**.
-
 ## Line art
-
-![Shaded, Lines, and Both views of a posed figure](docs/images/lineart-preview.png)
 
 The **View** switch above the docker viewport chooses **Shaded**, **Lines**, or **Both**. The same view is shown on the canvas.
 
@@ -180,20 +165,7 @@ The packager writes `dist/ksp-<version>.zip`, taking the version from `krita_sce
 
 These commands need no third-party packages. The tests run outside Krita and cover the posing core, picking, the editor, the shaders, line art, joint limits, body shape, figure import, the file formats, pixel transfer, the ctypes GL binding, document export against Krita API fakes, and the architecture rules (`core/` and `storage/` never import Krita or Qt, and only `integration/` edits documents).
 
-Checking the real Krita and OpenGL path is separate: `tools/krita_host_probe.py` runs the renderer and a real paint-layer export inside Krita without the GUI, and the compatibility notes explains how to run it and records the results. The packager uses an explicit runtime allowlist, sorted entries, fixed timestamps and permissions, and a bundled copy of `LICENSE`. Development files, tests, caches and logs do not ship.
-
-Design records:
-- the design notes: renderer and export assumptions
-- the design notes: GL functions through `ctypes`, so ANGLE works
-- the design notes: the figures and their rig and mesh formats, compiled by a pure-Python `.blend` reader
-- the design notes: viewport rendering, picking and posing
-- the design notes: posing on the canvas
-- the design notes: line art
-- the design notes: figure import
-- the design notes: joint limits, pose files, opacity and output
-- the design notes: body shape
-
-Next on the roadmap: separate line and tone layers, and hand and camera presets. The full plan is in the plan.
+Checking the real Krita and OpenGL path is separate: `tools/krita_host_probe.py` runs the renderer and a real paint-layer export inside Krita without the GUI. The packager uses an explicit runtime allowlist, sorted entries, fixed timestamps and permissions, and a bundled copy of `LICENSE`. Development files, tests, caches and logs do not ship.
 
 ## Update, disable, or uninstall
 

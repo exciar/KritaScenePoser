@@ -1,6 +1,6 @@
 # KSP feature list
 
-Version 0.0.9.
+Version 0.0.10.
 
 ## Figures
 

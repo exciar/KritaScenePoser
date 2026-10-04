@@ -1,4 +1,4 @@
-"""Architecture rules from the plan section 6, checked statically."""
+"""The architecture rules, checked statically."""
 
 import ast
 from pathlib import Path
