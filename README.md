@@ -146,11 +146,6 @@ KSP adds seven actions under **Tools → Scripts**:
 
 The actions ship without default shortcuts, so they never clash with Krita's own. To assign keys, open **Settings → Configure Krita → Keyboard Shortcuts** and search for "KSP". If no document is open, the Create buttons are disabled and their tooltips say why.
 
-## Diagnostic log
-
-The log is off by default. When **KSP: Diagnostic Log** is checked, KSP appends one JSON line per event to `krita_scene_poser/logs/ksp.log` in Krita's resource folder (**Settings → Manage Resources → Open Resource Folder**). Events include viewport initialization, context release, and export start, finish, or failure. The log is capped at 512 KB plus two rotated files.
-
-The log records GPU strings, sizes, and timings. It never records file paths, document names, pixel data, or tracebacks. Nothing is sent anywhere, and the setting is saved with Krita's other settings. Diagnostics show whether the log is on.
 
 ## Develop and package
 
