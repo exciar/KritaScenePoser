@@ -4,7 +4,7 @@ with Krita's own.
 
 import os
 
-from krita import Extension
+from krita import Extension, Krita
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox
 
@@ -15,6 +15,12 @@ from .docker import TITLE, KSPDocker
 MENU = "tools/scripts"
 ICON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     "assets", "icons", "ksp.svg")
+
+
+def active_window():
+    """Krita makes a fresh Window wrapper per call, and a kept one dies with its
+    window: touching it then raises "wrapped C/C++ object has been deleted"."""
+    return Krita.instance().activeWindow()
 
 
 def find_docker(window):
@@ -43,32 +49,32 @@ class KSPExtension(Extension):
         show = window.createAction(
             "krita_scene_poser_show", "KSP: Show Scene Poser", MENU)
         show.setIcon(icon)
-        show.triggered.connect(lambda checked=False: self._show(window))
+        show.triggered.connect(lambda checked=False: self._show())
         # The id predates line art; keep it so assigned shortcuts survive.
         create = window.createAction(
             "krita_scene_poser_create_layer", "KSP: Create Guide Layer", MENU)
         create.setIcon(icon)
-        create.triggered.connect(lambda checked=False: self._create_layer(window, "guide"))
+        create.triggered.connect(lambda checked=False: self._create_layer("guide"))
         lineart = window.createAction(
             "krita_scene_poser_create_lineart_layer", "KSP: Create Lineart Layer", MENU)
         lineart.setIcon(icon)
         lineart.setToolTip("Render the posed figure's line art into a new layer.")
-        lineart.triggered.connect(lambda checked=False: self._create_layer(window, "lineart"))
+        lineart.triggered.connect(lambda checked=False: self._create_layer("lineart"))
         save_pose = window.createAction(
             "krita_scene_poser_save_pose", "KSP: Save Pose…", MENU)
         save_pose.setIcon(icon)
-        save_pose.triggered.connect(lambda checked=False: self._pose_file(window, "save"))
+        save_pose.triggered.connect(lambda checked=False: self._pose_file("save"))
         load_pose = window.createAction(
             "krita_scene_poser_load_pose", "KSP: Load Pose…", MENU)
         load_pose.setIcon(icon)
-        load_pose.triggered.connect(lambda checked=False: self._pose_file(window, "load"))
+        load_pose.triggered.connect(lambda checked=False: self._pose_file("load"))
         canvas = window.createAction(
             "krita_scene_poser_pose_on_canvas", "KSP: Pose on Canvas", MENU)
         canvas.setIcon(icon)
         canvas.setCheckable(True)
         canvas.setToolTip("Pose the figure directly on the canvas. Brushes are paused while on.")
-        canvas.triggered.connect(lambda checked=False: self._pose_on_canvas(window, checked))
-        self.canvas_actions.append((window, canvas))
+        canvas.triggered.connect(lambda checked=False: self._pose_on_canvas(checked))
+        self.canvas_actions.append(canvas)
         diagnostic = window.createAction(
             "krita_scene_poser_diagnostic_log", "KSP: Diagnostic Log", MENU)
         diagnostic.setCheckable(True)
@@ -78,8 +84,9 @@ class KSPExtension(Extension):
         diagnostic.toggled.connect(self._set_diagnostic_log)
         self.log_actions.append(diagnostic)
 
-    def _docker(self, window):
-        dock = find_docker(window)
+    def _docker(self):
+        window = active_window()
+        dock = find_docker(window) if window is not None else None
         if dock is None:
             raise RuntimeError(
                 "The KSP docker is not loaded. Check that KSP is enabled in "
@@ -88,52 +95,52 @@ class KSPExtension(Extension):
         dock.raise_()
         return dock
 
-    def _show(self, window):
+    def _show(self):
         try:
-            self._docker(window)
+            self._docker()
         except Exception as error:
-            self._warn(window, error)
+            self._warn(error)
 
-    def _create_layer(self, window, kind):
+    def _create_layer(self, kind):
         try:
-            dock = self._docker(window)
+            dock = self._docker()
             if kind == "lineart":
                 dock.create_lineart_layer()
             else:
                 dock.create_layer()
         except Exception as error:
-            self._warn(window, error)
+            self._warn(error)
 
-    def _pose_file(self, window, action):
+    def _pose_file(self, action):
         try:
-            dock = self._docker(window)
+            dock = self._docker()
             if action == "save":
                 dock.save_pose()
             else:
                 dock.load_pose()
         except Exception as error:
-            self._warn(window, error)
+            self._warn(error)
 
-    def _pose_on_canvas(self, window, checked):
+    def _pose_on_canvas(self, checked):
         try:
-            dock = self._docker(window)
+            dock = self._docker()
             if not getattr(dock, "_ksp_canvas_synced", False):
                 dock.canvas.state_changed.connect(lambda: self._sync_canvas_actions(dock))
                 dock._ksp_canvas_synced = True
             dock.set_pose_on_canvas(bool(checked))
             self._sync_canvas_actions(dock)
         except Exception as error:
-            self._warn(window, error)
+            self._warn(error)
 
     def _sync_canvas_actions(self, dock):
-        for window, action in list(self.canvas_actions):
+        for action in list(self.canvas_actions):
             try:
                 if action.isChecked() != dock.canvas.posing:
                     action.blockSignals(True)
                     action.setChecked(dock.canvas.posing)
                     action.blockSignals(False)
             except RuntimeError:  # The action's window was closed.
-                self.canvas_actions.remove((window, action))
+                self.canvas_actions.remove(action)
 
     def _set_diagnostic_log(self, enabled):
         try:
@@ -148,7 +155,7 @@ class KSPExtension(Extension):
                 except RuntimeError:  # The action's window was closed.
                     self.log_actions.remove(action)
         except Exception as error:
-            self._warn(None, error)
+            self._warn(error)
 
     def _apply_logging(self):
         try:
@@ -159,9 +166,10 @@ class KSPExtension(Extension):
             log.configure(None)  # A log that cannot be written stays off.
 
     @staticmethod
-    def _warn(window, error):
+    def _warn(error):
         parent = None
         try:
+            window = active_window()
             parent = window.qwindow() if window is not None else None
         except Exception:
             pass

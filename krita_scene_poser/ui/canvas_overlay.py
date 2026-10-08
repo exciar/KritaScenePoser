@@ -293,6 +293,10 @@ class CanvasController(QObject):
             from krita import Krita
             window = Krita.instance().activeWindow()
             view = window.activeView() if window is not None else None
+            # Drop closed windows first: their id can be reused by a new one,
+            # which would skip the connection below.
+            self.windows = {key: kept for key, kept in self.windows.items()
+                            if not sip.isdeleted(kept)}
             if window is not None and id(window.qwindow()) not in self.windows:
                 # Krita returns a fresh wrapper per call; keep this one so the
                 # connection lives as long as the window.
